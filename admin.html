@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BBV Bingo Admin</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f4f8;min-height:100vh}
+:root{--navy:#192b40;--teal:#00bebe;--green:#00af91}
+
+/* LOGIN */
+#admin-login{min-height:100vh;display:flex;align-items:center;justify-content:center}
+.admin-login-card{background:#fff;border-radius:16px;padding:2rem;max-width:360px;width:90%;box-shadow:0 4px 20px rgba(0,0,0,.08)}
+.admin-login-card h1{font-size:20px;font-weight:700;color:var(--navy);margin-bottom:6px}
+.admin-login-card p{font-size:13px;color:#666;margin-bottom:1.5rem}
+.field{margin-bottom:1rem}
+.field label{display:block;font-size:12px;font-weight:600;color:var(--navy);margin-bottom:5px;text-transform:uppercase;letter-spacing:.5px}
+.field input{width:100%;padding:10px 12px;border:1.5px solid #dde;border-radius:8px;font-size:14px;outline:none}
+.field input:focus{border-color:var(--teal)}
+.admin-btn{width:100%;padding:11px;background:var(--navy);color:#fff;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer}
+.admin-btn:hover{background:var(--teal);color:var(--navy)}
+.err{font-size:12px;color:#c0392b;margin-top:.75rem;display:none}
+
+/* DASHBOARD */
+#dashboard{display:none}
+.topbar{background:var(--navy);padding:1rem 1.5rem;display:flex;align-items:center;justify-content:space-between}
+.topbar h1{color:#fff;font-size:18px;font-weight:700}
+.topbar span{color:#9FE1CB;font-size:13px}
+.logout-btn{background:rgba(255,255,255,.1);color:#fff;border:1px solid rgba(255,255,255,.2);padding:6px 14px;border-radius:8px;font-size:12px;cursor:pointer}
+.logout-btn:hover{background:rgba(255,255,255,.2)}
+
+.dash-body{max-width:1100px;margin:0 auto;padding:1.5rem}
+
+/* STATS ROW */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:1.5rem}
+.stat{background:#fff;border-radius:12px;padding:1.25rem;text-align:center;border:0.5px solid #e0e8f0}
+.stat .num{font-size:28px;font-weight:700;color:var(--navy)}
+.stat .lbl{font-size:12px;color:#888;margin-top:4px}
+
+/* RESERVATIONS INPUT */
+.section-card{background:#fff;border-radius:12px;padding:1.25rem;margin-bottom:1.5rem;border:0.5px solid #e0e8f0}
+.section-card h2{font-size:15px;font-weight:700;color:var(--navy);margin-bottom:1rem}
+.add-res-form{display:flex;gap:8px;flex-wrap:wrap}
+.add-res-form input{flex:1;min-width:140px;padding:9px 12px;border:1.5px solid #dde;border-radius:8px;font-size:13px;outline:none}
+.add-res-form input:focus{border-color:var(--teal)}
+.add-btn{padding:9px 18px;background:var(--teal);color:var(--navy);border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.add-btn:hover{background:var(--green);color:#fff}
+.add-success{font-size:12px;color:var(--green);margin-top:8px;display:none}
+
+/* SESSIONS TABLE */
+.sessions-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;flex-wrap:gap}
+.sessions-header h2{font-size:15px;font-weight:700;color:var(--navy)}
+.filter-tabs{display:flex;gap:6px}
+.tab{padding:5px 12px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid #dde;background:#fff;color:#666;transition:all .15s}
+.tab.active{background:var(--navy);color:#fff;border-color:var(--navy)}
+
+.session-list{display:flex;flex-direction:column;gap:10px}
+.session-card{background:#fff;border-radius:12px;border:0.5px solid #e0e8f0;overflow:hidden}
+.session-head{display:flex;align-items:center;justify-content:space-between;padding:1rem 1.25rem;cursor:pointer;gap:12px;flex-wrap:wrap}
+.session-head:hover{background:#f8fafa}
+.guest-info h3{font-size:14px;font-weight:700;color:var(--navy)}
+.guest-info p{font-size:12px;color:#888;margin-top:2px}
+.status-badges{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.badge{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600}
+.badge.pending{background:#fff8e0;color:#7a5f00}
+.badge.bingo{background:#e0f7f5;color:#085041}
+.badge.approved{background:#e8f5e9;color:#2e7d32}
+.badge.started{background:#f3f0ff;color:#4527a0}
+.expand-icon{color:#aaa;font-size:18px;transition:transform .2s}
+.session-card.open .expand-icon{transform:rotate(180deg)}
+
+.session-body{display:none;border-top:1px solid #f0f4f8;padding:1.25rem}
+.session-card.open .session-body{display:block}
+
+.activities-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:1.25rem}
+.act-item{border:1px solid #e8f0fe;border-radius:10px;overflow:hidden}
+.act-item.completed{border-color:#b2dfdb}
+.act-thumb{width:100%;height:120px;object-fit:cover;background:#f5f5f5;display:block}
+.act-thumb-placeholder{width:100%;height:120px;background:#f5fafa;display:flex;align-items:center;justify-content:center;font-size:32px}
+.act-info{padding:8px 10px}
+.act-info p{font-size:12px;font-weight:600;color:var(--navy)}
+.act-info span{font-size:11px;color:#888}
+
+.approve-section{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-top:1rem;border-top:1px solid #f0f4f8}
+.approve-section textarea{flex:1;min-width:200px;padding:8px 10px;border:1.5px solid #dde;border-radius:8px;font-size:13px;resize:vertical;min-height:60px;outline:none}
+.approve-section textarea:focus{border-color:var(--teal)}
+.approve-btn{padding:9px 18px;background:var(--green);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer}
+.approve-btn:hover{background:#008f78}
+.approved-tag{font-size:13px;color:var(--green);font-weight:600}
+
+.empty-state{text-align:center;padding:3rem;color:#aaa;font-size:14px}
+.refresh-btn{background:transparent;border:1.5px solid #dde;color:#666;padding:6px 14px;border-radius:8px;font-size:12px;cursor:pointer;font-weight:600}
+.refresh-btn:hover{border-color:var(--teal);color:var(--teal)}
+
+.spinner{display:inline-block;width:16px;height:16px;border:2px solid #dde;border-top-color:var(--teal);border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<!-- ADMIN LOGIN -->
+<div id="admin-login">
+  <div class="admin-login-card">
+    <h1>BBV Bingo Admin</h1>
+    <p>Staff access only — Big Bear Vacations team</p>
+    <div class="field"><label>Password</label><input type="password" id="pw-input" placeholder="Enter admin password" onkeydown="if(event.key==='Enter')adminLogin()"></div>
+    <button class="admin-btn" onclick="adminLogin()">Sign In</button>
+    <p class="err" id="pw-err">Incorrect password. Please try again.</p>
+  </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard">
+  <div class="topbar">
+    <h1>🏔️ BBV Bingo Dashboard</h1>
+    <div style="display:flex;align-items:center;gap:12px">
+      <span id="last-refresh"></span>
+      <button class="refresh-btn" style="color:#9FE1CB;border-color:rgba(255,255,255,.2)" onclick="loadData()">↻ Refresh</button>
+      <button class="logout-btn" onclick="adminLogout()">Sign Out</button>
+    </div>
+  </div>
+
+  <div class="dash-body">
+    <!-- STATS -->
+    <div class="stats">
+      <div class="stat"><div class="num" id="s-total">—</div><div class="lbl">Total Reservations</div></div>
+      <div class="stat"><div class="num" id="s-started">—</div><div class="lbl">Games Started</div></div>
+      <div class="stat"><div class="num" id="s-bingo">—</div><div class="lbl">Bingos Completed</div></div>
+      <div class="stat"><div class="num" id="s-pending">—</div><div class="lbl">Rewards Pending</div></div>
+      <div class="stat"><div class="num" id="s-approved">—</div><div class="lbl">Rewards Approved</div></div>
+    </div>
+
+    <!-- ADD RESERVATION -->
+    <div class="section-card">
+      <h2>Add Reservation</h2>
+      <div class="add-res-form">
+        <input type="text" id="new-res" placeholder="Reservation #">
+        <input type="text" id="new-last" placeholder="Last Name">
+        <input type="text" id="new-guest" placeholder="Guest Name (optional)">
+        <input type="text" id="new-cabin" placeholder="Cabin Name (optional)">
+        <input type="date" id="new-checkin" placeholder="Check-in">
+        <button class="add-btn" onclick="addReservation()">+ Add</button>
+      </div>
+      <p class="add-success" id="add-success">✓ Reservation added successfully!</p>
+    </div>
+
+    <!-- SESSIONS -->
+    <div class="section-card">
+      <div class="sessions-header" style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+        <h2>Guest Sessions</h2>
+        <div class="filter-tabs">
+          <div class="tab active" onclick="setFilter('all',this)">All</div>
+          <div class="tab" onclick="setFilter('bingo',this)">Bingo ✓</div>
+          <div class="tab" onclick="setFilter('pending',this)">Pending Reward</div>
+          <div class="tab" onclick="setFilter('approved',this)">Approved</div>
+        </div>
+      </div>
+      <div class="session-list" id="session-list">
+        <div class="empty-state"><span class="spinner"></span> Loading sessions...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://tgpbthntkrwhslkhfqak.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRncGJ0aG50a3J3aHNsa2hmcWFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0OTAxMzMsImV4cCI6MjA5MzA2NjEzM30.0_ZW2kfxKQUJAVyVOsazJkRfdiaNWWK6y29CzHWxKkI';
+const ADMIN_PASSWORD = 'bbv-bingo-admin-2026';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+let allSessions = [];
+let currentFilter = 'all';
+
+function adminLogin() {
+  const pw = document.getElementById('pw-input').value;
+  if (pw === ADMIN_PASSWORD) {
+    document.getElementById('admin-login').style.display = 'none';
+    document.getElementById('dashboard').style.display = 'block';
+    loadData();
+  } else {
+    document.getElementById('pw-err').style.display = 'block';
+  }
+}
+
+function adminLogout() {
+  document.getElementById('admin-login').style.display = 'flex';
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('pw-input').value = '';
+}
+
+async function addReservation() {
+  const res = document.getElementById('new-res').value.trim();
+  const last = document.getElementById('new-last').value.trim();
+  const guest = document.getElementById('new-guest').value.trim();
+  const cabin = document.getElementById('new-cabin').value.trim();
+  const checkin = document.getElementById('new-checkin').value;
+  if (!res || !last) { alert('Reservation number and last name are required.'); return; }
+  const { error } = await sb.from('reservations').insert({
+    reservation_number: res, last_name: last,
+    guest_name: guest || null, cabin_name: cabin || null,
+    check_in: checkin || null
+  });
+  if (error) { alert('Error: ' + (error.message.includes('unique') ? 'That reservation number already exists.' : error.message)); return; }
+  ['new-res','new-last','new-guest','new-cabin','new-checkin'].forEach(id => document.getElementById(id).value = '');
+  const s = document.getElementById('add-success'); s.style.display = 'block';
+  setTimeout(() => s.style.display = 'none', 3000);
+  loadData();
+}
+
+async function loadData() {
+  document.getElementById('last-refresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  const { data: reservations } = await sb.from('reservations').select('*');
+  const { data: sessions } = await sb.from('bingo_sessions').select('*, reservations(*)');
+  const { data: activities } = await sb.from('completed_activities').select('*');
+
+  const total = reservations ? reservations.length : 0;
+  const started = sessions ? sessions.length : 0;
+  const bingos = sessions ? sessions.filter(s => s.completed_bingo).length : 0;
+  const pending = sessions ? sessions.filter(s => s.completed_bingo && !s.reward_approved).length : 0;
+  const approved = sessions ? sessions.filter(s => s.reward_approved).length : 0;
+
+  document.getElementById('s-total').textContent = total;
+  document.getElementById('s-started').textContent = started;
+  document.getElementById('s-bingo').textContent = bingos;
+  document.getElementById('s-pending').textContent = pending;
+  document.getElementById('s-approved').textContent = approved;
+
+  allSessions = (sessions || []).map(s => ({
+    ...s, activities: (activities || []).filter(a => a.session_id === s.id)
+  }));
+  renderSessions();
+}
+
+function setFilter(f, el) {
+  currentFilter = f;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderSessions();
+}
+
+function renderSessions() {
+  let filtered = allSessions;
+  if (currentFilter === 'bingo') filtered = filtered.filter(s => s.completed_bingo);
+  if (currentFilter === 'pending') filtered = filtered.filter(s => s.completed_bingo && !s.reward_approved);
+  if (currentFilter === 'approved') filtered = filtered.filter(s => s.reward_approved);
+
+  const list = document.getElementById('session-list');
+  if (!filtered.length) { list.innerHTML = '<div class="empty-state">No sessions found for this filter.</div>'; return; }
+
+  list.innerHTML = filtered.map(s => {
+    const r = s.reservations;
+    const actCount = s.activities.length;
+    const checkin = r && r.check_in ? new Date(r.check_in).toLocaleDateString() : 'N/A';
+    const started = new Date(s.started_at).toLocaleDateString();
+    let statusBadge = `<span class="badge started">Playing (${actCount}/24)</span>`;
+    if (s.completed_bingo && s.reward_approved) statusBadge = `<span class="badge approved">✓ Reward Approved</span>`;
+    else if (s.completed_bingo) statusBadge = `<span class="badge pending">⏳ Reward Pending</span><span class="badge bingo">Bingo!</span>`;
+
+    const actsHtml = s.activities.map(a => `
+      <div class="act-item completed">
+        ${a.photo_url ? `<img class="act-thumb" src="${SUPABASE_URL}/storage/v1/object/authenticated/bingo-photos/${a.photo_url}" onerror="this.style.display='none'">` : `<div class="act-thumb-placeholder">📷</div>`}
+        <div class="act-info"><p>${a.activity_name}</p><span>${new Date(a.completed_at).toLocaleDateString()}</span></div>
+      </div>`).join('');
+
+    const approveHtml = s.completed_bingo && !s.reward_approved
+      ? `<div class="approve-section">
+          <textarea id="notes-${s.id}" placeholder="Add reward notes (e.g. discount code sent)..."></textarea>
+          <button class="approve-btn" onclick="approveReward('${s.id}')">✓ Approve Reward</button>
+        </div>`
+      : s.reward_approved
+      ? `<div class="approve-section"><span class="approved-tag">✓ Reward approved on ${new Date(s.reward_approved_at).toLocaleDateString()}${s.reward_notes ? ' — ' + s.reward_notes : ''}</span></div>`
+      : '';
+
+    return `<div class="session-card" id="sc-${s.id}">
+      <div class="session-head" onclick="toggleCard('${s.id}')">
+        <div class="guest-info">
+          <h3>${r ? (r.guest_name || r.last_name) : 'Guest'} ${r && r.cabin_name ? '· ' + r.cabin_name : ''}</h3>
+          <p>Res: ${r ? r.reservation_number : 'N/A'} · Check-in: ${checkin} · Started: ${started}</p>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="status-badges">${statusBadge}</div>
+          <span class="expand-icon">▼</span>
+        </div>
+      </div>
+      <div class="session-body">
+        ${actCount ? `<div class="activities-grid">${actsHtml}</div>` : '<p style="font-size:13px;color:#aaa;margin-bottom:1rem">No activities completed yet.</p>'}
+        ${approveHtml}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleCard(id) {
+  document.getElementById('sc-' + id).classList.toggle('open');
+}
+
+async function approveReward(sessionId) {
+  const notes = document.getElementById('notes-' + sessionId).value.trim();
+  const { error } = await sb.from('bingo_sessions').update({
+    reward_approved: true, reward_approved_at: new Date().toISOString(), reward_notes: notes
+  }).eq('id', sessionId);
+  if (error) { alert('Error approving reward: ' + error.message); return; }
+  loadData();
+}
+</script>
+</body>
+</html>

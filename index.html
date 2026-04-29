@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Big Bear Bingo — Big Bear Vacations</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f0f9f8;min-height:100vh}
+:root{--navy:#192b40;--teal:#00bebe;--green:#00af91;--pale:#e0f7f5}
+
+/* LOGIN SCREEN */
+#login-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1rem}
+.login-card{background:#fff;border-radius:20px;padding:2.5rem 2rem;max-width:400px;width:100%;box-shadow:0 4px 24px rgba(25,43,64,.10)}
+.login-logo{display:flex;justify-content:center;margin-bottom:1.5rem}
+.login-logo img{height:80px;object-fit:contain}
+.login-card h1{font-size:22px;font-weight:600;color:var(--navy);text-align:center;margin-bottom:6px}
+.login-card p{font-size:14px;color:#666;text-align:center;line-height:1.6;margin-bottom:1.75rem}
+.field{margin-bottom:1rem}
+.field label{display:block;font-size:13px;font-weight:500;color:var(--navy);margin-bottom:6px}
+.field input{width:100%;padding:12px 14px;border:1.5px solid #d0eeea;border-radius:10px;font-size:15px;outline:none;transition:border-color .15s}
+.field input:focus{border-color:var(--teal)}
+.login-btn{width:100%;padding:13px;background:var(--navy);color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;transition:background .2s;margin-top:.5rem}
+.login-btn:hover{background:var(--teal);color:var(--navy)}
+.login-btn:disabled{opacity:.5;cursor:default}
+.login-error{background:#fff0f0;border:1px solid #ffcccc;border-radius:8px;padding:10px 14px;font-size:13px;color:#c0392b;margin-top:1rem;display:none}
+.login-note{font-size:12px;color:#999;text-align:center;margin-top:1rem;line-height:1.5}
+
+/* BINGO APP */
+#bingo-screen{display:none}
+.hero{background:var(--navy);padding:1.5rem 1rem 1.25rem;text-align:center}
+.hero-logo{display:flex;justify-content:center;margin-bottom:.75rem}
+.hero-logo img{height:70px;object-fit:contain}
+.hero-tag{display:inline-block;background:var(--teal);color:var(--navy);font-size:11px;font-weight:600;letter-spacing:1px;padding:4px 14px;border-radius:20px;margin-bottom:8px;text-transform:uppercase}
+.hero h1{color:#fff;font-size:22px;font-weight:600;margin-bottom:4px}
+.hero p{color:#9FE1CB;font-size:13px;line-height:1.5}
+.guest-badge{display:inline-block;background:rgba(0,190,190,.15);border:1px solid rgba(0,190,190,.3);color:#9FE1CB;font-size:12px;padding:4px 12px;border-radius:20px;margin-top:8px}
+
+.app-body{max-width:640px;margin:0 auto;padding:1.25rem 1rem}
+.prog-row{display:flex;align-items:center;gap:10px;margin-bottom:1rem}
+.prog-bar{flex:1;height:6px;background:#d0eeea;border-radius:3px;overflow:hidden}
+.prog-fill{height:100%;background:var(--teal);border-radius:3px;transition:width .3s}
+.prog-label{font-size:12px;color:var(--navy);font-weight:500;min-width:80px;text-align:right}
+
+.bingo-header{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-bottom:5px}
+.bingo-header span{text-align:center;font-size:13px;font-weight:700;color:var(--navy);letter-spacing:2px;padding:4px 0}
+
+.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-bottom:1.25rem}
+.cell{background:#fff;border:1.5px solid #d0eeea;border-radius:10px;padding:8px 4px;cursor:pointer;text-align:center;min-height:82px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;transition:all .15s;position:relative}
+.cell:hover{border-color:var(--teal);background:#f0fcfb}
+.cell.done{background:#e0f7f5;border-color:var(--teal)}
+.cell.line{background:var(--teal);border-color:var(--teal)}
+.cell.free{background:var(--navy);border-color:var(--navy);cursor:default}
+.cell .check{position:absolute;top:4px;right:4px;width:16px;height:16px;background:var(--green);border-radius:50%;display:none;align-items:center;justify-content:center}
+.cell.done .check{display:flex}
+.cell.line .check{display:flex;background:var(--navy)}
+.check svg{width:10px;height:10px;fill:none;stroke:#fff;stroke-width:2.5}
+.c-ico{font-size:19px;line-height:1}
+.c-name{font-size:9.5px;font-weight:500;color:var(--navy);line-height:1.3}
+.cell.done .c-name{color:#085041}
+.cell.line .c-name{color:#04342C}
+.cell.free .c-name{color:#9FE1CB;font-size:11px}
+
+.bingo-badge{text-align:center;margin-bottom:1rem;min-height:24px}
+.bingo-badge span{display:inline-block;background:var(--navy);color:var(--teal);font-size:12px;font-weight:600;padding:5px 18px;border-radius:20px}
+
+.cta-btn{display:block;width:100%;padding:14px;font-size:15px;font-weight:600;background:var(--navy);color:#fff;border:none;border-radius:12px;cursor:pointer;opacity:.35;pointer-events:none;transition:all .2s;letter-spacing:.3px}
+.cta-btn.on{opacity:1;pointer-events:auto}
+.cta-btn.on:hover{background:var(--teal);color:var(--navy)}
+
+/* MODAL */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(25,43,64,.75);z-index:100;align-items:center;justify-content:center;padding:1rem}
+.modal-overlay.open{display:flex}
+.modal{background:#fff;border-radius:16px;padding:1.5rem;max-width:360px;width:100%}
+.modal-top{display:flex;align-items:flex-start;gap:12px;margin-bottom:10px}
+.modal-ico{font-size:28px;flex-shrink:0}
+.modal h2{font-size:16px;font-weight:600;color:var(--navy);line-height:1.3;padding-top:2px}
+.modal p{font-size:13px;color:#555;line-height:1.6;margin-bottom:14px}
+.upload-label{font-size:12px;font-weight:500;color:var(--navy);margin-bottom:6px;display:block}
+.upload-box{border:1.5px dashed var(--teal);border-radius:10px;padding:1.25rem;text-align:center;cursor:pointer;background:#f0fcfb;margin-bottom:14px;transition:background .15s}
+.upload-box:hover{background:#e0f7f5}
+.upload-box p{font-size:12px;color:#085041}
+.upload-box input{display:none}
+.upload-prev{max-width:100%;max-height:120px;border-radius:8px;object-fit:cover;margin-top:8px;display:none}
+.upload-status{font-size:12px;color:var(--green);margin-top:6px;display:none}
+.modal-btns{display:flex;gap:8px}
+.modal-btns button{flex:1;padding:10px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
+.btn-cancel{background:#f5f5f5;border:1px solid #ddd;color:#555}
+.btn-cancel:hover{background:#eee}
+.btn-done{background:var(--navy);border:none;color:#fff}
+.btn-done:hover{background:var(--teal);color:var(--navy)}
+.btn-done:disabled{opacity:.35;cursor:default;background:var(--navy);color:#fff}
+
+/* CONGRATS */
+#congrats-screen{display:none;min-height:100vh}
+.congrats-hero{background:var(--navy);padding:2rem 1rem;text-align:center}
+.congrats-body{max-width:500px;margin:0 auto;padding:2rem 1.5rem;text-align:center}
+.confetti{font-size:52px;margin-bottom:1rem}
+.congrats-body h1{font-size:24px;font-weight:700;color:var(--navy);margin-bottom:12px}
+.congrats-body p{font-size:15px;color:#555;line-height:1.7;margin-bottom:1.5rem}
+.share-box{background:var(--navy);border-radius:14px;padding:1.5rem;margin-bottom:1.5rem}
+.share-box p{font-size:14px;color:#9FE1CB;line-height:1.7}
+.share-box .hl{color:var(--teal);font-weight:600}
+.reward-pending{background:#fff8e0;border:1px solid #ffe082;border-radius:12px;padding:1.25rem;font-size:13px;color:#7a5f00;line-height:1.6}
+
+/* LOADING */
+.spinner{display:inline-block;width:18px;height:18px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+@media(max-width:400px){
+  .cell{min-height:70px}.c-ico{font-size:16px}.c-name{font-size:8.5px}
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <img src="logo.png" alt="Big Bear Vacations" onerror="this.style.display='none'">
+    </div>
+    <h1>Big Bear Bingo</h1>
+    <p>Enter your reservation details to start your Berry-Fun adventure!</p>
+    <div class="field">
+      <label>Reservation Number</label>
+      <input type="text" id="res-input" placeholder="e.g. 12345" autocomplete="off">
+    </div>
+    <div class="field">
+      <label>Last Name</label>
+      <input type="text" id="name-input" placeholder="e.g. Smith" autocomplete="off">
+    </div>
+    <button class="login-btn" id="login-btn" onclick="startGame()">Start Playing</button>
+    <div class="login-error" id="login-error"></div>
+    <p class="login-note">Your game is private and locked to your reservation. Only you can access it.</p>
+  </div>
+</div>
+
+<!-- BINGO SCREEN -->
+<div id="bingo-screen">
+  <div class="hero">
+    <div class="hero-logo">
+      <img src="logo.png" alt="Big Bear Vacations" onerror="this.style.display='none'">
+    </div>
+    <span class="hero-tag">Berry-Fun Challenge</span>
+    <h1>Big Bear Bingo</h1>
+    <p>Complete 5 in a row to claim your reward!</p>
+    <div class="guest-badge" id="guest-badge">Welcome, Guest!</div>
+  </div>
+  <div class="app-body">
+    <div class="prog-row">
+      <div class="prog-bar"><div class="prog-fill" id="pfill" style="width:0%"></div></div>
+      <span class="prog-label" id="plabel">0 / 24 done</span>
+    </div>
+    <div class="bingo-header">
+      <span>B</span><span>I</span><span>N</span><span>G</span><span>O</span>
+    </div>
+    <div class="grid" id="grid"></div>
+    <div class="bingo-badge" id="badge"></div>
+    <button class="cta-btn" id="ctabtn" onclick="showCongrats()">Claim my reward!</button>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal-overlay">
+  <div class="modal">
+    <div class="modal-top">
+      <span class="modal-ico" id="m-ico"></span>
+      <h2 id="m-title"></h2>
+    </div>
+    <p id="m-desc"></p>
+    <span class="upload-label">Upload a photo to complete this activity:</span>
+    <div class="upload-box" onclick="document.getElementById('finput').click()">
+      <p id="u-prompt">Tap to choose a photo from your camera or gallery</p>
+      <img id="u-prev" class="upload-prev">
+      <input type="file" id="finput" accept="image/*" capture="environment" onchange="onPhoto(event)">
+    </div>
+    <div class="upload-status" id="upload-status">✓ Photo ready</div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">Cancel</button>
+      <button class="btn-done" id="btn-done" onclick="markDone()" disabled>Mark Complete</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONGRATS SCREEN -->
+<div id="congrats-screen">
+  <div class="congrats-hero">
+    <div class="hero-logo">
+      <img src="logo.png" alt="Big Bear Vacations" onerror="this.style.display='none'">
+    </div>
+  </div>
+  <div class="congrats-body">
+    <div class="confetti">🎉</div>
+    <h1>You completed Berry-Fun Bingo!</h1>
+    <p>Amazing work exploring Big Bear! You've discovered the best this mountain destination has to offer.</p>
+    <div class="share-box">
+      <p>Take a screenshot &amp; share on social media by tagging <span class="hl">@BigBearVacations</span> — or leave us a <span class="hl">Google Review</span> and tell us about your favorite moment!</p>
+    </div>
+    <div class="reward-pending">
+      🎁 Your reward is being reviewed by our team. We'll reach out to you within 24 hours to confirm and send your prize!
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://tgpbthntkrwhslkhfqak.supabase.co';
+const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRncGJ0aG50a3J3aHNsa2hmcWFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0OTAxMzMsImV4cCI6MjA5MzA2NjEzM30.0_ZW2kfxKQUJAVyVOsazJkRfdiaNWWK6y29CzHWxKkI';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+
+const ACTIVITIES = [
+  {n:"Hike Castle Rock",i:"🏔️",d:"Tackle the 2.2-mile Castle Rock Trail for panoramic views of Big Bear Lake from the summit boulders."},
+  {n:"Paddleboard",i:"🏄",d:"Glide across the calm waters of Big Bear Lake on a stand-up paddleboard — perfect for all skill levels."},
+  {n:"Discovery Center",i:"🦅",d:"Explore local wildlife exhibits and watch live raptor demonstrations at the Big Bear Discovery Center."},
+  {n:"Bike Alpine Path",i:"🚴",d:"Cruise the flat, scenic 3-mile Alpine Pedal Path hugging the north shore of Big Bear Lake."},
+  {n:"Catch a sunset",i:"🌅",d:"Find a lakeside spot and watch the sun dip behind the San Bernardino Mountains in orange and pink."},
+  {n:"Try local BBQ",i:"🍖",d:"Dig into smoky, slow-cooked BBQ at one of Big Bear's most beloved local restaurants."},
+  {n:"Kayak the lake",i:"🛶",d:"Paddle across Big Bear Lake in a kayak and enjoy stunning mountain reflections on the water."},
+  {n:"Play mini golf",i:"⛳",d:"Enjoy a fun round of mini golf — a classic Big Bear activity great for families and groups."},
+  {n:"Big Bear Zoo",i:"🐻",d:"Meet rescued wildlife including bears, mountain lions, and eagles at the Big Bear Alpine Zoo."},
+  {n:"Explore the Village",i:"🛍️",d:"Stroll through Big Bear Lake Village, browse boutique shops, and grab a sweet treat."},
+  {n:"Go stargazing",i:"✨",d:"Big Bear's high altitude and clear dark skies make for some of the best stargazing in Southern California."},
+  {n:"Ride the gondola",i:"🚡",d:"Take the scenic gondola at Snow Summit for breathtaking aerial views of the lake and mountains."},
+  {n:"FREE",i:"⭐",d:"",free:true},
+  {n:"Fish the lake",i:"🎣",d:"Cast a line into Big Bear Lake — stocked with trout and bass, it's great fishing year-round."},
+  {n:"Spot a bald eagle",i:"🦅",d:"Big Bear is one of the best spots in SoCal to see bald eagles soaring overhead."},
+  {n:"Grizzly Manor Café",i:"🥞",d:"Start your morning with legendary pancakes at Grizzly Manor Café — a true Big Bear institution."},
+  {n:"Photo at the dam",i:"📸",d:"Snap a photo at Big Bear Dam, one of the oldest multiple-arch dams in the US."},
+  {n:"Horseback riding",i:"🐴",d:"Ride through pine-covered trails and experience Big Bear from a whole new perspective on horseback."},
+  {n:"Axe throwing",i:"🪓",d:"Channel your inner lumberjack at axe throwing — a surprisingly addictive activity in the Village."},
+  {n:"Rent an ATV",i:"🏍️",d:"Hit the off-road trails on an ATV and explore Big Bear's rugged terrain with some adrenaline."},
+  {n:"Have a campfire",i:"🔥",d:"Gather around a crackling campfire under the stars — the ultimate Big Bear night-in experience."},
+  {n:"Holcomb Valley",i:"🌲",d:"Drive or hike through Holcomb Valley and discover Big Bear's rich gold rush history."},
+  {n:"Play at the beach",i:"🏖️",d:"Spend time at one of Big Bear Lake's sandy beaches — swim, relax, or build sandcastles."},
+  {n:"Craft beer tasting",i:"🍺",d:"Stop by Big Bear Lake Brewing Company and sample handcrafted beers made right in the mountains."},
+  {n:"Nature walk",i:"🌿",d:"Wander a gentle trail through the pines and breathe in crisp Big Bear mountain air."}
+];
+
+let sessionId = null;
+let reservationId = null;
+let guestName = '';
+let done = new Array(25).fill(false);
+let photos = new Array(25).fill(null);
+let currentCell = null;
+let currentFile = null;
+done[12] = true;
+
+// Check URL params on load
+window.onload = function() {
+  const params = new URLSearchParams(window.location.search);
+  const res = params.get('res');
+  const last = params.get('last');
+  if (res) document.getElementById('res-input').value = res;
+  if (last) document.getElementById('name-input').value = last;
+  if (res && last) startGame();
+};
+
+async function startGame() {
+  const resNum = document.getElementById('res-input').value.trim();
+  const lastName = document.getElementById('name-input').value.trim();
+  const btn = document.getElementById('login-btn');
+  const errEl = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  if (!resNum || !lastName) { showError('Please enter both your reservation number and last name.'); return; }
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>Checking...';
+
+  // Look up reservation
+  const { data: res, error } = await sb.from('reservations')
+    .select('*')
+    .ilike('last_name', lastName)
+    .eq('reservation_number', resNum)
+    .single();
+
+  if (error || !res) {
+    showError('We couldn\'t find a reservation matching that number and last name. Please check and try again.');
+    btn.disabled = false; btn.innerHTML = 'Start Playing'; return;
+  }
+
+  reservationId = res.id;
+  guestName = res.guest_name || lastName;
+
+  // Check for existing session
+  const { data: existingSession } = await sb.from('bingo_sessions')
+    .select('*').eq('reservation_id', res.id).single();
+
+  if (existingSession) {
+    sessionId = existingSession.id;
+    // Load existing progress
+    const { data: acts } = await sb.from('completed_activities')
+      .select('*').eq('session_id', sessionId);
+    if (acts) acts.forEach(a => { done[a.activity_index] = true; photos[a.activity_index] = a.photo_url; });
+    if (existingSession.completed_bingo) { showCongrats(); return; }
+  } else {
+    // Create new session
+    const token = Math.random().toString(36).substring(2) + Date.now().toString(36);
+    const { data: newSession, error: se } = await sb.from('bingo_sessions')
+      .insert({ reservation_id: res.id, session_token: token }).select().single();
+    if (se) { showError('Something went wrong. Please try again.'); btn.disabled = false; btn.innerHTML = 'Start Playing'; return; }
+    sessionId = newSession.id;
+  }
+
+  document.getElementById('guest-badge').textContent = 'Welcome, ' + guestName + '!';
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('bingo-screen').style.display = 'block';
+  buildGrid();
+  refresh();
+}
+
+function showError(msg) {
+  const el = document.getElementById('login-error');
+  el.textContent = msg; el.style.display = 'block';
+}
+
+function buildGrid() {
+  const g = document.getElementById('grid'); g.innerHTML = '';
+  ACTIVITIES.forEach((a, i) => {
+    const c = document.createElement('div');
+    c.className = 'cell' + (a.free ? ' free done' : '');
+    c.id = 'c' + i;
+    c.innerHTML = `<div class="check"><svg viewBox="0 0 12 12"><polyline points="2,6 5,9 10,3"/></svg></div><span class="c-ico">${a.i}</span><span class="c-name">${a.n}</span>`;
+    if (!a.free) c.onclick = () => openModal(i);
+    g.appendChild(c);
+  });
+}
+
+function openModal(i) {
+  currentCell = i; currentFile = null;
+  const a = ACTIVITIES[i];
+  document.getElementById('m-ico').textContent = a.i;
+  document.getElementById('m-title').textContent = a.n;
+  document.getElementById('m-desc').textContent = a.d;
+  const prev = document.getElementById('u-prev');
+  prev.style.display = 'none'; prev.src = '';
+  document.getElementById('u-prompt').style.display = 'block';
+  document.getElementById('upload-status').style.display = 'none';
+  document.getElementById('btn-done').disabled = !done[i];
+  document.getElementById('finput').value = '';
+  if (photos[i]) {
+    prev.src = photos[i]; prev.style.display = 'block';
+    document.getElementById('u-prompt').style.display = 'none';
+    document.getElementById('btn-done').disabled = false;
+  }
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  currentCell = null; currentFile = null;
+}
+
+function onPhoto(e) {
+  const f = e.target.files[0]; if (!f) return;
+  currentFile = f;
+  const r = new FileReader();
+  r.onload = ev => {
+    const prev = document.getElementById('u-prev');
+    prev.src = ev.target.result; prev.style.display = 'block';
+    document.getElementById('u-prompt').style.display = 'none';
+    document.getElementById('upload-status').style.display = 'block';
+    document.getElementById('btn-done').disabled = false;
+  };
+  r.readAsDataURL(f);
+}
+
+async function markDone() {
+  if (currentCell === null) return;
+  const btn = document.getElementById('btn-done');
+  btn.disabled = true; btn.textContent = 'Saving...';
+  let photoUrl = photos[currentCell] || null;
+
+  if (currentFile && sessionId) {
+    const ext = currentFile.name.split('.').pop();
+    const path = `${sessionId}/${currentCell}_${Date.now()}.${ext}`;
+    const { data: up, error: ue } = await sb.storage.from('bingo-photos').upload(path, currentFile);
+    if (!ue) photoUrl = path;
+  }
+
+  if (sessionId) {
+    if (!done[currentCell]) {
+      await sb.from('completed_activities').insert({
+        session_id: sessionId,
+        activity_index: currentCell,
+        activity_name: ACTIVITIES[currentCell].n,
+        photo_url: photoUrl
+      });
+    }
+  }
+
+  done[currentCell] = true;
+  photos[currentCell] = photoUrl;
+  closeModal();
+  btn.disabled = false; btn.textContent = 'Mark Complete';
+  refresh();
+}
+
+function getLines() {
+  const R=[[0,1,2,3,4],[5,6,7,8,9],[10,11,12,13,14],[15,16,17,18,19],[20,21,22,23,24]];
+  const C=[[0,5,10,15,20],[1,6,11,16,21],[2,7,12,17,22],[3,8,13,18,23],[4,9,14,19,24]];
+  const D=[[0,6,12,18,24],[4,8,12,16,20]];
+  return [...R,...C,...D].filter(l => l.every(i => done[i]));
+}
+
+function refresh() {
+  const lines = getLines(); const inLine = new Set(lines.flat());
+  ACTIVITIES.forEach((_, i) => {
+    const c = document.getElementById('c' + i); if (!c) return;
+    c.className = 'cell' + (ACTIVITIES[i].free ? ' free' : '');
+    if (done[i] && inLine.has(i)) c.classList.add('line');
+    else if (done[i]) c.classList.add('done');
+  });
+  const cnt = done.filter(Boolean).length - 1;
+  document.getElementById('pfill').style.width = Math.round(cnt / 24 * 100) + '%';
+  document.getElementById('plabel').textContent = cnt + ' / 24 done';
+  const b = document.getElementById('badge');
+  b.innerHTML = lines.length ? `<span>🎉 ${lines.length} bingo${lines.length > 1 ? 's' : ''} complete!</span>` : '';
+  const ctabtn = document.getElementById('ctabtn');
+  lines.length ? ctabtn.classList.add('on') : ctabtn.classList.remove('on');
+}
+
+async function showCongrats() {
+  if (sessionId) {
+    await sb.from('bingo_sessions').update({ completed_bingo: true }).eq('id', sessionId);
+  }
+  document.getElementById('bingo-screen').style.display = 'none';
+  document.getElementById('congrats-screen').style.display = 'block';
+}
+</script>
+</body>
+</html>
