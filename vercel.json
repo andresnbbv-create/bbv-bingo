@@ -1,11 +1,14 @@
 {
   "version": 2,
-  "builds": [
-    { "src": "*.html", "use": "@vercel/static" },
-    { "src": "*.png", "use": "@vercel/static" }
+  "crons": [
+    {
+      "path": "/api/sync",
+      "schedule": "0 8 * * *"
+    }
   ],
   "routes": [
     { "src": "/admin", "dest": "/admin.html" },
+    { "src": "/api/sync", "dest": "/api/sync.js" },
     { "src": "/", "dest": "/index.html" }
   ]
 }
