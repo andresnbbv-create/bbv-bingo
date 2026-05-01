@@ -621,6 +621,16 @@ async function startGame() {
     }
   }
 
+  // Log this player to bingo_players table
+  try {
+    await dbCall('logPlayer', {
+      first_name: first,
+      last_name: last,
+      reservation_number: normalize(res),
+      check_in_date: selectedCheckIn
+    });
+  } catch(e){ console.log('Player log note:', e.message); }
+
   const badge = document.getElementById('guest-badge');
   if(hasSavedProgress){
     const cnt = done.filter(Boolean).length - 1;

@@ -144,6 +144,32 @@ export default async function handler(req, res) {
         break;
       }
 
+      case 'logPlayer': {
+        const { first_name, last_name, reservation_number, check_in_date } = payload;
+        // Upsert — update if reservation already exists, insert if new
+        const checkUrl = `${SUPABASE_URL}/rest/v1/bingo_players?reservation_number=eq.${encodeURIComponent(reservation_number)}&select=id&limit=1`;
+        const checkR = await fetch(checkUrl, { headers });
+        const existing = await checkR.json();
+        if (Array.isArray(existing) && existing.length > 0) {
+          // Update existing record with latest login info
+          const updateUrl = `${SUPABASE_URL}/rest/v1/bingo_players?id=eq.${existing[0].id}`;
+          await fetch(updateUrl, {
+            method: 'PATCH',
+            headers,
+            body: JSON.stringify({ first_name, last_name, check_in_date, started_at: new Date().toISOString() })
+          });
+        } else {
+          // Insert new player record
+          await fetch(`${SUPABASE_URL}/rest/v1/bingo_players`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ first_name, last_name, reservation_number, check_in_date, started_at: new Date().toISOString() })
+          });
+        }
+        result = { success: true };
+        break;
+      }
+
       default:
         return res.status(400).json({ error: `Unknown action: ${action}` });
     }
