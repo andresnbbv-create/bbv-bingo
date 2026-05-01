@@ -892,6 +892,20 @@ async function markDone(){
   } else {
     showSaved('✓ Marked complete (offline mode)');
   }
+
+  // STEP 6: Update bingo_players stats
+  if(guestRes){
+    try {
+      const activitiesDone = done.filter(Boolean).length - 1; // minus FREE
+      const photosDone = photoPaths.filter(Boolean).length;
+      await dbCall('updatePlayerStats', {
+        reservation_number: normalize(guestRes),
+        activities_completed: activitiesDone,
+        photos_submitted: photosDone,
+        completed_bingo: getLines().length > 0
+      });
+    } catch(e){ console.log('Stats update note:', e.message); }
+  }
 }
 
 async function saveProgress(){
@@ -930,6 +944,16 @@ async function saveProgress(){
 async function showCongrats(){
   if(sessionId){
     try { await dbCall('completeGame', {session_id: sessionId}); } catch(e){ console.error(e); }
+  }
+  if(guestRes){
+    try {
+      await dbCall('updatePlayerStats', {
+        reservation_number: normalize(guestRes),
+        activities_completed: done.filter(Boolean).length - 1,
+        photos_submitted: photoPaths.filter(Boolean).length,
+        completed_bingo: true
+      });
+    } catch(e){ console.log('Stats update note:', e.message); }
   }
   showCongratsScreen();
 }
