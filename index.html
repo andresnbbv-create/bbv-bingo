@@ -572,6 +572,48 @@ async function autoSaveActivity(idx, photoStoragePath){
 }
 
 // ── Login / startGame ─────────────────────────────────────────
+// ── Compress image before upload (max 800px, 0.7 quality) ────
+async function compressImage(file, maxPx=800, quality=0.7){
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let {width:w, height:h} = img;
+      if(w > maxPx || h > maxPx){
+        if(w > h){ h = Math.round(h * maxPx / w); w = maxPx; }
+        else { w = Math.round(w * maxPx / h); h = maxPx; }
+      }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(blob => {
+        URL.revokeObjectURL(url);
+        resolve(blob || file);
+      }, 'image/jpeg', quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+}
+
+// ── Ensure session exists — call before any DB write ─────────
+async function ensureSession(first, last, res, checkIn){
+  if(sessionId) return true; // already have one
+  try {
+    reservationDbId = await findOrCreateSession(first, last, res, checkIn);
+    const {session} = await findOrCreateBingoSession(reservationDbId, weekLabel);
+    sessionId = session.id;
+    console.log('Session created:', sessionId);
+    return true;
+  } catch(e){
+    console.error('ensureSession failed:', e.message);
+    return false;
+  }
+}
+
+// Store current guest info for re-use in ensureSession
+let guestFirst='', guestLast='', guestRes='', guestCheckIn='';
+
 async function startGame() {
   const first = document.getElementById('first-input').value.trim();
   const last  = document.getElementById('last-input').value.trim();
@@ -583,6 +625,9 @@ async function startGame() {
   if(!res){ showError('Please enter your reservation number.'); return; }
   if(!selectedCheckIn){ showError('Please select your check-in date on the calendar.'); return; }
 
+  // Store for later use
+  guestFirst=first; guestLast=last; guestRes=res; guestCheckIn=selectedCheckIn;
+
   const btn = document.getElementById('login-btn');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Loading your card...';
@@ -592,52 +637,60 @@ async function startGame() {
   done = new Array(25).fill(false);
   photos = new Array(25).fill(null);
   photoPaths = new Array(25).fill(null);
-  done[12] = true; // FREE square always done
+  done[12] = true;
   let hasSavedProgress = false;
 
+  // Connect to DB — show specific error if it fails
   try {
-    // 1. Find or create reservation
     reservationDbId = await findOrCreateSession(first, last, res, selectedCheckIn);
-
-    // 2. Find or create bingo session
-    const {session, isNew} = await findOrCreateBingoSession(reservationDbId, label);
-    sessionId = session.id;
-
-    if(session.completed_bingo){ showCongratsScreen(); return; }
-
-    if(!isNew){
-      // 3. Load saved activity progress
-      const {data:savedActs, error:loadErr} = await sb
-        .from('completed_activities')
-        .select('*')
-        .eq('session_id', sessionId)
-        .order('activity_index', {ascending: true});
-
-      if(loadErr) console.error('Load error:', loadErr.message);
-
-      if(savedActs && savedActs.length > 0){
-        savedActs.forEach(a => {
-          if(a.activity_index >= 0 && a.activity_index < 25){
-            done[a.activity_index] = true;
-            if(a.photo_url){
-              photoPaths[a.activity_index] = a.photo_url; // storage path
-              photos[a.activity_index] = a.photo_url; // will be resolved to signed URL
-            }
-          }
-        });
-        hasSavedProgress = savedActs.length > 0;
-      }
-    }
+    console.log('Reservation ID:', reservationDbId);
   } catch(e){
-    console.error('startGame DB error:', e.message);
-    // Still let them play even if DB fails
+    console.error('Reservation error:', e.message);
+    // Continue without DB — guest can still play
   }
 
-  // Update UI
+  if(reservationDbId){
+    try {
+      const {session, isNew} = await findOrCreateBingoSession(reservationDbId, label);
+      sessionId = session.id;
+      console.log('Session ID:', sessionId, isNew ? '(new)' : '(existing)');
+
+      if(session.completed_bingo){ showCongratsScreen(); return; }
+
+      if(!isNew){
+        const {data:savedActs, error:loadErr} = await sb
+          .from('completed_activities')
+          .select('*')
+          .eq('session_id', sessionId)
+          .order('activity_index', {ascending:true});
+
+        if(loadErr){
+          console.error('Load progress error:', loadErr.message, loadErr.code);
+        } else if(savedActs && savedActs.length > 0){
+          savedActs.forEach(a => {
+            if(a.activity_index >= 0 && a.activity_index < 25){
+              done[a.activity_index] = true;
+              if(a.photo_url){
+                // photo_url is now a public URL — use directly
+                photos[a.activity_index] = a.photo_url;
+                photoPaths[a.activity_index] = a.photo_url;
+              }
+            }
+          });
+          hasSavedProgress = true;
+          console.log('Restored', savedActs.length, 'activities');
+        }
+      }
+    } catch(e){
+      console.error('Session error:', e.message);
+      sessionId = null;
+    }
+  }
+
   const badge = document.getElementById('guest-badge');
   if(hasSavedProgress){
-    const completedCount = done.filter(Boolean).length - 1;
-    badge.textContent = 'Welcome back, ' + first + '! ' + completedCount + ' activities restored ✓';
+    const cnt = done.filter(Boolean).length - 1;
+    badge.textContent = 'Welcome back, ' + first + '! ' + cnt + ' activities restored ✓';
     badge.style.background = 'rgba(0,175,145,.25)';
     badge.style.borderColor = 'rgba(0,175,145,.5)';
   } else {
@@ -808,54 +861,81 @@ async function markDone(){
   btn.disabled = true;
   btn.textContent = 'Saving...';
 
-  // STEP 1: Set blob URL immediately for display — never lose the photo on screen
+  // STEP 1: Show photo immediately via blob URL — never blank the square
+  let blobUrl = null;
   if(currentFile){
-    photos[currentCell] = URL.createObjectURL(currentFile);
+    blobUrl = URL.createObjectURL(currentFile);
+    photos[currentCell] = blobUrl;
   }
 
-  // STEP 2: Mark complete right away
+  // STEP 2: Mark done and update UI instantly
   done[currentCell] = true;
-
-  // STEP 3: Close modal and update UI immediately (don't wait for DB)
   closeModal();
   btn.disabled = false;
   btn.textContent = 'Mark Complete ✓';
-  updatePhotoBackgroundsLocal(); // instant local update using blob URL
+  updatePhotoBackgroundsLocal();
   refresh();
 
-  // STEP 4: Upload photo to Supabase storage in background
-  let storagePath = photoPaths[currentCell] || null;
-  if(currentFile){
-    try {
-      const ext = (currentFile.name.split('.').pop() || 'jpg').toLowerCase();
-      const folder = sessionId || ('guest_' + Date.now());
-      const newPath = folder + '/cell_' + currentCell + '_' + Date.now() + '.' + ext;
-      const {error:ue} = await sb.storage.from('bingo-photos').upload(newPath, currentFile, {upsert:true});
-      if(!ue){
-        photoPaths[currentCell] = newPath;
-        storagePath = newPath;
-      } else {
-        console.error('Photo upload error:', ue.message);
-        // Photo still shows via blob URL this session — just won't persist across sessions
-      }
-    } catch(e){ console.error('Upload exception:', e); }
+  // STEP 3: Ensure we have a DB session (create one if needed)
+  if(!sessionId){
+    await ensureSession(guestFirst, guestLast, guestRes, guestCheckIn);
   }
 
-  // STEP 5: Save activity to DB
-  const saved = await autoSaveActivity(currentCell, storagePath);
-  if(saved) showSaved('✓ Progress saved');
-  else {
-    // Still show as saved if activity was marked done — photo just may not persist
-    showSaved('✓ Marked complete');
-    console.warn('DB save failed — progress may not persist across sessions');
+  // STEP 4: Compress + upload photo to Supabase Storage
+  let publicUrl = photoPaths[currentCell] || null; // keep existing if no new file
+  if(currentFile && sessionId){
+    try {
+      // Compress to max 800px / 70% quality before upload
+      const compressed = await compressImage(currentFile, 800, 0.70);
+      const folder = sessionId;
+      const path = folder + '/cell_' + currentCell + '_' + Date.now() + '.jpg';
+
+      const {data:upData, error:ue} = await sb.storage
+        .from('bingo-photos')
+        .upload(path, compressed, {contentType:'image/jpeg', upsert:true});
+
+      if(ue){
+        console.error('Upload error:', ue.message, ue.statusCode);
+      } else {
+        // Get public URL — no signing needed if bucket is public
+        const {data:pub} = sb.storage.from('bingo-photos').getPublicUrl(path);
+        if(pub && pub.publicUrl){
+          publicUrl = pub.publicUrl;
+          photos[currentCell] = publicUrl; // upgrade from blob to permanent URL
+          photoPaths[currentCell] = publicUrl;
+          updatePhotoBackgroundsLocal(); // re-render with permanent URL
+        }
+      }
+    } catch(e){
+      console.error('Photo compress/upload exception:', e);
+    }
+  } else if(currentFile && !sessionId){
+    console.warn('No sessionId — photo saved locally only this session');
+  }
+
+  // STEP 5: Save to DB
+  if(sessionId){
+    const saved = await autoSaveActivity(currentCell, publicUrl);
+    if(saved) showSaved('✓ Progress saved');
+    else showSaved('✓ Marked complete (save issue — try again)');
+  } else {
+    showSaved('✓ Marked complete (offline mode)');
   }
 }
 
 async function saveProgress(){
   const btn = document.getElementById('save-btn');
+  // If no session, try to create one now
   if(!sessionId){
-    showSaved('⚠ Not connected — progress may not persist');
-    return;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Connecting...';
+    const ok = await ensureSession(guestFirst, guestLast, guestRes, guestCheckIn);
+    btn.disabled = false;
+    btn.innerHTML = '&#128190; Save Progress';
+    if(!ok){
+      showSaved('⚠ Could not connect — check your internet connection');
+      return;
+    }
   }
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Verifying...';
