@@ -893,18 +893,20 @@ async function markDone(){
     showSaved('✓ Marked complete (offline mode)');
   }
 
-  // STEP 6: Update bingo_players stats
+  // STEP 6: Update bingo_players stats (after refresh so bingo lines are current)
   if(guestRes){
     try {
-      const activitiesDone = done.filter(Boolean).length - 1; // minus FREE
-      const photosDone = photoPaths.filter(Boolean).length;
+      const activitiesDone = done.filter(Boolean).length - 1;
+      const photosDone = photoPaths.filter(p => p !== null).length;
+      const hasBingo = getLines().length > 0;
+      console.log('Updating player stats:', activitiesDone, photosDone, hasBingo, normalize(guestRes));
       await dbCall('updatePlayerStats', {
         reservation_number: normalize(guestRes),
         activities_completed: activitiesDone,
         photos_submitted: photosDone,
-        completed_bingo: getLines().length > 0
+        completed_bingo: hasBingo
       });
-    } catch(e){ console.log('Stats update note:', e.message); }
+    } catch(e){ console.error('Stats update error:', e.message); }
   }
 }
 

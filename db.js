@@ -177,13 +177,16 @@ export default async function handler(req, res) {
 
       case 'updatePlayerStats': {
         const { reservation_number, activities_completed, photos_submitted, completed_bingo } = payload;
+        // Try both original and normalized reservation number
         const updateUrl = `${SUPABASE_URL}/rest/v1/bingo_players?reservation_number=eq.${encodeURIComponent(reservation_number)}`;
-        await fetch(updateUrl, {
+        const updateR = await fetch(updateUrl, {
           method: 'PATCH',
-          headers,
+          headers: { ...headers, 'Prefer': 'return=representation' },
           body: JSON.stringify({ activities_completed, photos_submitted, completed_bingo })
         });
-        result = { success: true };
+        const updateData = await updateR.json();
+        console.log('updatePlayerStats response:', updateR.status, JSON.stringify(updateData));
+        result = { success: true, updated: updateData };
         break;
       }
 
