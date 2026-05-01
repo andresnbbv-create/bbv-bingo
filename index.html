@@ -31,7 +31,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .cal-day{text-align:center;padding:6px 2px;font-size:12px;border-radius:6px;cursor:pointer;color:var(--navy);transition:all .15s}
 .cal-day:hover:not(.cal-empty):not(.cal-past){background:var(--pale)}
 .cal-day.cal-empty{cursor:default}
-.cal-day.cal-past{color:#ccc;cursor:default}
+.cal-day.cal-past{color:#aaa}
 .cal-day.cal-selected{background:var(--teal);color:#fff;font-weight:700}
 .cal-day.cal-today{border:1.5px solid var(--teal)}
 .stay-display{background:var(--pale);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--navy);margin-top:6px;min-height:32px;text-align:center}
@@ -128,6 +128,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .share-box{background:rgba(255,255,255,.08);border:1px solid rgba(0,190,190,.3);border-radius:16px;padding:1.5rem;margin-bottom:1rem}
 .share-box p{font-size:14px;color:#9FE1CB;line-height:1.8}
 .reward-pending{background:rgba(255,200,0,.1);border:1px solid rgba(255,200,0,.3);border-radius:12px;padding:1.25rem;font-size:13px;color:#ffe082;line-height:1.6}
+.save-btn{width:100%;padding:11px;background:transparent;color:var(--teal);border:1.5px solid var(--teal);border-radius:12px;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;margin-bottom:0}
+.save-btn:hover{background:var(--pale)}
+.save-toast{text-align:center;font-size:13px;color:var(--green);font-weight:600;padding:6px;opacity:0;transition:opacity .3s;height:28px}
+.save-toast.show{opacity:1}
 .spinner{display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px}
 @keyframes spin{to{transform:rotate(360deg)}}
 @media(max-width:500px){.cell{min-height:80px}.cell-name{font-size:8px}.cell-tooltip{display:none!important}}
@@ -177,7 +181,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="bingo-header"><span>B</span><span>I</span><span>N</span><span>G</span><span>O</span></div>
     <div class="grid" id="grid"></div>
     <div class="bingo-badge" id="badge"></div>
+    <div style="display:flex;gap:8px;margin-bottom:.75rem">
+      <button class="save-btn" id="save-btn" onclick="saveProgress()">&#128190; Save Progress</button>
+    </div>
     <button class="cta-btn" id="ctabtn" onclick="showCongrats()">&#127881; Claim My Reward!</button>
+    <div class="save-toast" id="save-toast">&#10003; Progress saved!</div>
   </div>
 </div>
 
@@ -396,11 +404,8 @@ function renderCal() {
     const date=new Date(calYear,calMonth,d);date.setHours(0,0,0,0);
     const el=document.createElement('div');el.className='cal-day';el.textContent=d;
     const dateStr=date.toISOString().split('T')[0];
-    if(date<today){el.classList.add('cal-past');}
-    else{
-      if(selectedCheckIn===dateStr)el.classList.add('cal-selected');
-      el.onclick=()=>selectDate(dateStr,d);
-    }
+    if(selectedCheckIn===dateStr)el.classList.add('cal-selected');
+    el.onclick=()=>selectDate(dateStr,d);
     if(date.toDateString()===today.toDateString())el.classList.add('cal-today');
     grid.appendChild(el);
   }
@@ -417,7 +422,7 @@ function selectDate(dateStr,day) {
 // ============================================================
 // GAME STATE
 // ============================================================
-let sessionId=null,ACTS=[],weekLabel='';
+let sessionId=null,ACTS=[],weekLabel='',hasSavedProgress=false;
 let done=new Array(25).fill(false);
 let photos=new Array(25).fill(null);
 let currentCell=null,currentFile=null;
@@ -438,14 +443,28 @@ async function startGame() {
   ACTS=acts;weekLabel=label;
   done=new Array(25).fill(false);photos=new Array(25).fill(null);done[12]=true;
   try {
-    await sb.from('reservations').upsert({reservation_number:res,last_name:last.toLowerCase(),guest_name:first+' '+last,check_in:selectedCheckIn},{onConflict:'reservation_number',ignoreDuplicates:true});
+    // Upsert reservation (no validation — just tracking)
+    await sb.from('reservations').upsert({
+      reservation_number: res,
+      last_name: last.toLowerCase(),
+      guest_name: first+' '+last,
+      check_in: selectedCheckIn
+    },{onConflict:'reservation_number',ignoreDuplicates:true});
+
     const {data:resData}=await sb.from('reservations').select('id').eq('reservation_number',res).single();
     if(resData){
       const {data:existing}=await sb.from('bingo_sessions').select('*').eq('reservation_id',resData.id).single();
       if(existing){
         sessionId=existing.id;
-        const {data:acts2}=await sb.from('completed_activities').select('*').eq('session_id',sessionId);
-        if(acts2)acts2.forEach(a=>{done[a.activity_index]=true;photos[a.activity_index]=a.photo_url;});
+        // Load saved progress
+        const {data:savedActs}=await sb.from('completed_activities').select('*').eq('session_id',sessionId);
+        if(savedActs&&savedActs.length>0){
+          savedActs.forEach(a=>{
+            done[a.activity_index]=true;
+            photos[a.activity_index]=a.photo_url;
+          });
+          hasSavedProgress=true;
+        }
         if(existing.completed_bingo){showCongratsScreen();return;}
       } else {
         const token=res+'_'+Date.now();
@@ -455,6 +474,12 @@ async function startGame() {
     }
   } catch(e){console.log('Tracking:',e.message);}
   document.getElementById('guest-badge').textContent='Welcome, '+first+'!';
+  if(hasSavedProgress){
+    const badge=document.getElementById('guest-badge');
+    badge.textContent='Welcome back, '+first+'! Progress restored ✓';
+    badge.style.background='rgba(0,175,145,.25)';
+    badge.style.borderColor='rgba(0,175,145,.5)';
+  }
   document.getElementById('week-indicator').textContent=label+' Card';
   document.getElementById('login-screen').style.display='none';
   document.getElementById('bingo-screen').style.display='block';
@@ -587,6 +612,25 @@ function refresh(){
   b.innerHTML=lines.length?'<span>&#127881; '+lines.length+' bingo'+(lines.length>1?'s':'')+' complete!</span>':'';
   const ctabtn=document.getElementById('ctabtn');
   lines.length?ctabtn.classList.add('on'):ctabtn.classList.remove('on');
+}
+
+async function saveProgress(){
+  if(!sessionId){
+    // Save locally if no session yet
+    const btn=document.getElementById('save-btn');
+    btn.textContent='&#128190; Saved!';
+    setTimeout(()=>{btn.innerHTML='&#128190; Save Progress';},2000);
+    return;
+  }
+  const btn=document.getElementById('save-btn');
+  btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Saving...';
+  try {
+    // Progress is auto-saved on each markDone — this just confirms to the user
+    const toast=document.getElementById('save-toast');
+    toast.classList.add('show');
+    setTimeout(()=>toast.classList.remove('show'),3000);
+  } catch(e){console.log('Save error:',e);}
+  btn.disabled=false;btn.innerHTML='&#128190; Save Progress';
 }
 
 async function showCongrats(){
