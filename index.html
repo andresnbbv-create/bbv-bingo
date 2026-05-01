@@ -548,20 +548,21 @@ async function autoSaveActivity(idx, photoStoragePath){
       .maybeSingle();
     
     if(existing){
-      // Update photo if provided
+      // Update photo if we have a new one
       if(photoStoragePath && photoStoragePath !== existing.photo_url){
-        await sb.from('completed_activities')
-          .update({photo_url: photoStoragePath, completed_at: new Date().toISOString()})
+        const {error:ue} = await sb.from('completed_activities')
+          .update({photo_url: photoStoragePath})
           .eq('id', existing.id);
+        if(ue) throw new Error('Update failed: ' + ue.message);
       }
     } else {
-      await sb.from('completed_activities').insert({
+      const {error:ie} = await sb.from('completed_activities').insert({
         session_id: sessionId,
         activity_index: idx,
         activity_name: ACTS[idx] ? ACTS[idx].n : 'Activity',
-        photo_url: photoStoragePath || null,
-        completed_at: new Date().toISOString()
+        photo_url: photoStoragePath || null
       });
+      if(ie) throw new Error('Insert failed: ' + ie.message);
     }
     return true;
   } catch(e){
@@ -686,6 +687,25 @@ function buildGrid() {
   updatePhotoBackgrounds();
 }
 
+// Instant local update using cached photos[] (blob URLs from this session)
+function updatePhotoBackgroundsLocal(){
+  for(let i = 0; i < ACTS.length; i++){
+    if(!photos[i] || !ACTS[i] || ACTS[i].free) continue;
+    const c = document.getElementById('c' + i);
+    if(!c) continue;
+    let pb = c.querySelector('.cell-photo-bg');
+    if(!pb){
+      pb = document.createElement('div');
+      pb.className = 'cell-photo-bg';
+      c.insertBefore(pb, c.firstChild);
+    }
+    pb.style.backgroundImage = 'url(' + photos[i] + ')';
+    c.classList.add('has-photo');
+    const bg = c.querySelector('.cell-bg');
+    if(bg) bg.style.display = 'none';
+  }
+}
+
 async function updatePhotoBackgrounds(){
   for(let i = 0; i < ACTS.length; i++){
     const path = photoPaths[i] || photos[i];
@@ -788,36 +808,47 @@ async function markDone(){
   btn.disabled = true;
   btn.textContent = 'Saving...';
 
-  // Upload photo to Supabase storage if we have a new file
-  let storagePath = photoPaths[currentCell] || null;
-  if(currentFile && sessionId){
-    try {
-      const ext = (currentFile.name.split('.').pop() || 'jpg').toLowerCase();
-      const newPath = sessionId + '/cell_' + currentCell + '_' + Date.now() + '.' + ext;
-      const {error:ue} = await sb.storage.from('bingo-photos').upload(newPath, currentFile, {upsert:true});
-      if(!ue){
-        photos[currentCell] = URL.createObjectURL(currentFile); // blob for display
-        photoPaths[currentCell] = newPath; // path for DB
-        storagePath = newPath;
-      } else {
-        console.error('Photo upload:', ue.message);
-      }
-    } catch(e){ console.error('Upload error:', e); }
+  // STEP 1: Set blob URL immediately for display — never lose the photo on screen
+  if(currentFile){
+    photos[currentCell] = URL.createObjectURL(currentFile);
   }
 
-  // Mark complete
+  // STEP 2: Mark complete right away
   done[currentCell] = true;
 
-  // Auto-save to DB (upsert — handles both new and re-upload cases)
-  const saved = await autoSaveActivity(currentCell, storagePath);
-  if(saved) showSaved('✓ Progress saved');
-  else showSaveError();
-
+  // STEP 3: Close modal and update UI immediately (don't wait for DB)
   closeModal();
   btn.disabled = false;
   btn.textContent = 'Mark Complete ✓';
-  await updatePhotoBackgrounds();
+  updatePhotoBackgroundsLocal(); // instant local update using blob URL
   refresh();
+
+  // STEP 4: Upload photo to Supabase storage in background
+  let storagePath = photoPaths[currentCell] || null;
+  if(currentFile){
+    try {
+      const ext = (currentFile.name.split('.').pop() || 'jpg').toLowerCase();
+      const folder = sessionId || ('guest_' + Date.now());
+      const newPath = folder + '/cell_' + currentCell + '_' + Date.now() + '.' + ext;
+      const {error:ue} = await sb.storage.from('bingo-photos').upload(newPath, currentFile, {upsert:true});
+      if(!ue){
+        photoPaths[currentCell] = newPath;
+        storagePath = newPath;
+      } else {
+        console.error('Photo upload error:', ue.message);
+        // Photo still shows via blob URL this session — just won't persist across sessions
+      }
+    } catch(e){ console.error('Upload exception:', e); }
+  }
+
+  // STEP 5: Save activity to DB
+  const saved = await autoSaveActivity(currentCell, storagePath);
+  if(saved) showSaved('✓ Progress saved');
+  else {
+    // Still show as saved if activity was marked done — photo just may not persist
+    showSaved('✓ Marked complete');
+    console.warn('DB save failed — progress may not persist across sessions');
+  }
 }
 
 async function saveProgress(){
