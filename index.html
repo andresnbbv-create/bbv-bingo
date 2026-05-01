@@ -443,36 +443,55 @@ async function startGame() {
   ACTS=acts;weekLabel=label;
   done=new Array(25).fill(false);photos=new Array(25).fill(null);done[12]=true;
   try {
-    // Upsert reservation (no validation — just tracking)
-    await sb.from('reservations').upsert({
-      reservation_number: res,
-      last_name: last.toLowerCase(),
-      guest_name: first+' '+last,
-      check_in: selectedCheckIn
-    },{onConflict:'reservation_number',ignoreDuplicates:true});
+    // Step 1: Try to find existing reservation by number
+    let resId = null;
+    const {data:existing}=await sb.from('reservations').select('id').eq('reservation_number',res).maybeSingle();
+    if(existing){
+      resId=existing.id;
+      // Update guest name and check-in in case they changed
+      await sb.from('reservations').update({
+        last_name:last.toLowerCase(),
+        guest_name:first+' '+last,
+        check_in:selectedCheckIn
+      }).eq('id',resId);
+    } else {
+      // Create new reservation
+      const {data:newRes,error:re}=await sb.from('reservations').insert({
+        reservation_number:res,
+        last_name:last.toLowerCase(),
+        guest_name:first+' '+last,
+        check_in:selectedCheckIn
+      }).select('id').single();
+      if(newRes) resId=newRes.id;
+    }
 
-    const {data:resData}=await sb.from('reservations').select('id').eq('reservation_number',res).single();
-    if(resData){
-      const {data:existing}=await sb.from('bingo_sessions').select('*').eq('reservation_id',resData.id).single();
-      if(existing){
-        sessionId=existing.id;
-        // Load saved progress
-        const {data:savedActs}=await sb.from('completed_activities').select('*').eq('session_id',sessionId);
+    if(resId){
+      // Step 2: Find or create bingo session
+      const {data:session}=await sb.from('bingo_sessions').select('*').eq('reservation_id',resId).maybeSingle();
+      if(session){
+        sessionId=session.id;
+        // Step 3: Load all saved activity progress
+        const {data:savedActs}=await sb.from('completed_activities').select('*').eq('session_id',sessionId).order('activity_index');
         if(savedActs&&savedActs.length>0){
           savedActs.forEach(a=>{
             done[a.activity_index]=true;
-            photos[a.activity_index]=a.photo_url;
+            // Store the Supabase storage path so we can display it
+            if(a.photo_url) photos[a.activity_index]=a.photo_url;
           });
           hasSavedProgress=true;
         }
-        if(existing.completed_bingo){showCongratsScreen();return;}
+        if(session.completed_bingo){showCongratsScreen();return;}
       } else {
-        const token=res+'_'+Date.now();
-        const {data:ns}=await sb.from('bingo_sessions').insert({reservation_id:resData.id,session_token:token}).select().single();
-        if(ns)sessionId=ns.id;
+        // New session
+        const token=res+'_'+last.toLowerCase()+'_'+Date.now();
+        const {data:ns}=await sb.from('bingo_sessions').insert({
+          reservation_id:resId,
+          session_token:token
+        }).select().single();
+        if(ns) sessionId=ns.id;
       }
     }
-  } catch(e){console.log('Tracking:',e.message);}
+  } catch(e){console.log('Session error:',e.message);}
   document.getElementById('guest-badge').textContent='Welcome, '+first+'!';
   if(hasSavedProgress){
     const badge=document.getElementById('guest-badge');
@@ -522,17 +541,25 @@ function buildGrid() {
   updatePhotoBackgrounds();
 }
 
-function updatePhotoBackgrounds(){
-  ACTS.forEach((_,i)=>{
+async function updatePhotoBackgrounds(){
+  for(let i=0;i<ACTS.length;i++){
     if(photos[i]&&ACTS[i]&&!ACTS[i].free){
-      const c=document.getElementById('c'+i);if(!c)return;
+      const c=document.getElementById('c'+i);if(!c)continue;
+      let displayUrl=photos[i];
+      // If it's a storage path (not a blob or http URL), get a signed URL
+      if(displayUrl&&!displayUrl.startsWith('blob:')&&!displayUrl.startsWith('http')){
+        try{
+          const {data:signed}=await sb.storage.from('bingo-photos').createSignedUrl(displayUrl,3600);
+          if(signed&&signed.signedUrl) displayUrl=signed.signedUrl;
+        }catch(e){console.log('Photo URL error:',e);}
+      }
       let pb=c.querySelector('.cell-photo-bg');
       if(!pb){pb=document.createElement('div');pb.className='cell-photo-bg';c.insertBefore(pb,c.firstChild);}
-      pb.style.backgroundImage='url('+photos[i]+')';
+      pb.style.backgroundImage='url('+displayUrl+')';
       c.classList.add('has-photo');
       const bg=c.querySelector('.cell-bg');if(bg)bg.style.display='none';
     }
-  });
+  }
 }
 
 function openModal(i){
@@ -554,7 +581,19 @@ function openModal(i){
   document.getElementById('u-prompt').style.display='block';
   document.getElementById('btn-done').disabled=!done[i];
   document.getElementById('finput').value='';
-  if(photos[i]){prev.src=photos[i];prev.style.display='block';document.getElementById('u-prompt').style.display='none';document.getElementById('btn-done').disabled=false;}
+  if(photos[i]){
+    // photos[i] may be a blob URL (current session) or a storage path (restored)
+    let displaySrc=photos[i];
+    if(displaySrc&&!displaySrc.startsWith('blob:')&&!displaySrc.startsWith('http')){
+      // It's a storage path — get signed URL async
+      sb.storage.from('bingo-photos').createSignedUrl(displaySrc,3600).then(({data})=>{
+        if(data&&data.signedUrl){prev.src=data.signedUrl;prev.style.display='block';document.getElementById('u-prompt').style.display='none';}
+      });
+    } else {
+      prev.src=displaySrc;prev.style.display='block';document.getElementById('u-prompt').style.display='none';
+    }
+    document.getElementById('btn-done').disabled=false;
+  }
   document.getElementById('modal-overlay').classList.add('open');
 }
 
@@ -575,16 +614,31 @@ async function markDone(){
   if(currentCell===null)return;
   const btn=document.getElementById('btn-done');btn.disabled=true;btn.textContent='Saving...';
   let photoUrl=photos[currentCell]||null;
+  // Store photo in Supabase storage and save the path (not blob URL)
   if(currentFile&&sessionId){
     const ext=currentFile.name.split('.').pop();
-    const path=(sessionId||'guest')+'/'+currentCell+'_'+Date.now()+'.'+ext;
-    const {error:ue}=await sb.storage.from('bingo-photos').upload(path,currentFile);
-    if(!ue){photoUrl=URL.createObjectURL(currentFile);photos[currentCell]=photoUrl;}
+    const path=sessionId+'/cell_'+currentCell+'_'+Date.now()+'.'+ext;
+    const {data:upData,error:ue}=await sb.storage.from('bingo-photos').upload(path,currentFile,{upsert:true});
+    if(!ue){
+      // Store the storage path in DB, but use blob URL for immediate display
+      photoUrl=path;
+      photos[currentCell]=URL.createObjectURL(currentFile); // for display this session
+    }
   }
   if(sessionId&&!done[currentCell]){
-    await sb.from('completed_activities').insert({session_id:sessionId,activity_index:currentCell,activity_name:ACTS[currentCell]?ACTS[currentCell].n:'Activity',photo_url:photoUrl});
+    const {error:ie}=await sb.from('completed_activities').insert({
+      session_id:sessionId,
+      activity_index:currentCell,
+      activity_name:ACTS[currentCell]?ACTS[currentCell].n:'Activity',
+      photo_url:photoUrl // stores the storage path
+    });
+    if(ie) console.log('Activity save error:',ie.message);
+  } else if(sessionId&&done[currentCell]&&photoUrl){
+    // Update existing record with new photo
+    await sb.from('completed_activities').update({photo_url:photoUrl})
+      .eq('session_id',sessionId).eq('activity_index',currentCell);
   }
-  done[currentCell]=true;closeModal();btn.disabled=false;btn.textContent='Mark Complete \u2713';
+  done[currentCell]=true;closeModal();btn.disabled=false;btn.textContent='Mark Complete ✓';
   updatePhotoBackgrounds();refresh();
 }
 
@@ -615,21 +669,37 @@ function refresh(){
 }
 
 async function saveProgress(){
-  if(!sessionId){
-    // Save locally if no session yet
-    const btn=document.getElementById('save-btn');
-    btn.textContent='&#128190; Saved!';
-    setTimeout(()=>{btn.innerHTML='&#128190; Save Progress';},2000);
-    return;
-  }
   const btn=document.getElementById('save-btn');
+  const toast=document.getElementById('save-toast');
   btn.disabled=true;btn.innerHTML='<span class="spinner"></span>Saving...';
   try {
-    // Progress is auto-saved on each markDone — this just confirms to the user
-    const toast=document.getElementById('save-toast');
+    if(!sessionId){
+      toast.textContent='⚠️ Please log in again to save progress.';
+      toast.style.color='#c0392b';
+      toast.classList.add('show');
+      setTimeout(()=>toast.classList.remove('show'),3000);
+      btn.disabled=false;btn.innerHTML='&#128190; Save Progress';
+      return;
+    }
+    // Verify session exists in DB
+    const {data:check,error:ce}=await sb.from('bingo_sessions').select('id').eq('id',sessionId).single();
+    if(ce||!check) throw new Error('Session not found');
+    // Count saved activities
+    const {data:saved,error:se}=await sb.from('completed_activities').select('activity_index').eq('session_id',sessionId);
+    if(se) throw new Error('Could not verify saved activities');
+    const savedCount=saved?saved.length:0;
+    const doneCount=done.filter(Boolean).length-1; // minus free space
+    toast.textContent='✓ Progress saved! '+savedCount+' of '+doneCount+' activities stored.';
+    toast.style.color='var(--green)';
     toast.classList.add('show');
-    setTimeout(()=>toast.classList.remove('show'),3000);
-  } catch(e){console.log('Save error:',e);}
+    setTimeout(()=>toast.classList.remove('show'),4000);
+  } catch(e){
+    console.log('Save error:',e);
+    toast.textContent='⚠️ Save failed. Check your connection and try again.';
+    toast.style.color='#c0392b';
+    toast.classList.add('show');
+    setTimeout(()=>toast.classList.remove('show'),4000);
+  }
   btn.disabled=false;btn.innerHTML='&#128190; Save Progress';
 }
 
