@@ -1,5 +1,6 @@
 const SUPABASE_URL = 'https://tgpbthntkrwhslkhfqak.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRncGJ0aG50a3J3aHNsa2hmcWFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0OTAxMzMsImV4cCI6MjA5MzA2NjEzM30.0_ZW2kfxKQUJAVyVOsazJkRfdiaNWWK6y29CzHWxKkI';
+const SUPABASE_SERVICE = process.env.SUPABASE_SERVICE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRncGJ0aG50a3J3aHNsa2hmcWFrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NzQ5MDEzMywiZXhwIjoyMDkzMDY2MTMzfQ.cSTS5B4JG9DJC6dB5WYJn1DMatMt89yDELK6TZ0wRl8';
 
 export default async function handler(req, res) {
   // CORS headers — allow requests from our Vercel app
@@ -15,9 +16,10 @@ export default async function handler(req, res) {
     const { action, payload } = req.body || {};
     if (!action) return res.status(400).json({ error: 'Missing action' });
 
+    // Use service key for writes (bypasses RLS), anon for reads
     const headers = {
-      'apikey': SUPABASE_ANON,
-      'Authorization': `Bearer ${SUPABASE_ANON}`,
+      'apikey': SUPABASE_SERVICE,
+      'Authorization': `Bearer ${SUPABASE_SERVICE}`,
       'Content-Type': 'application/json',
       'Prefer': 'return=representation'
     };
