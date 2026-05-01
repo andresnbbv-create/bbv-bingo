@@ -231,11 +231,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 <script>
 const SUPABASE_URL='https://tgpbthntkrwhslkhfqak.supabase.co';
 const SUPABASE_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRncGJ0aG50a3J3aHNsa2hmcWFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0OTAxMzMsImV4cCI6MjA5MzA2NjEzM30.0_ZW2kfxKQUJAVyVOsazJkRfdiaNWWK6y29CzHWxKkI';
-const sb=supabase.createClient(SUPABASE_URL,SUPABASE_ANON);
+// Use legacy anon key — all DB calls go through /api/db proxy to avoid CORS allowlist
+const sb=supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 
 // Normalize lookup key — trim + lowercase
 function normalize(s){ return (s||'').trim().toLowerCase(); }
 function lookupKey(first,last,res){ return normalize(first)+'|'+normalize(last)+'|'+normalize(res); }
+
+// ── DB proxy — all calls go through /api/db to avoid CORS issues ──
+async function dbCall(action, payload){
+  const r = await fetch('/api/db', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({action, payload})
+  });
+  if(!r.ok) throw new Error('DB proxy error: ' + r.status);
+  const json = await r.json();
+  if(json.error) throw new Error(json.error);
+  return json.data;
+}
 
 
 // ============================================================
@@ -464,109 +478,43 @@ function showSaveError(){
 
 // Find or create reservation + session using first+last+res as unique key
 async function findOrCreateSession(first, last, res, checkIn){
-  const key = lookupKey(first, last, res);
-  
-  // 1. Try to find existing reservation by normalized lookup key
-  const {data:existing} = await sb
-    .from('reservations')
-    .select('id, guest_name, check_in')
-    .eq('reservation_number', normalize(res))
-    .eq('last_name', normalize(last))
-    .maybeSingle();
-
-  let resId = null;
-
-  if(existing){
-    resId = existing.id;
-    // Update first name and check-in in case they differ
-    await sb.from('reservations').update({
-      guest_name: first.trim() + ' ' + last.trim(),
-      check_in: checkIn
-    }).eq('id', resId);
-  } else {
-    // Check if reservation_number exists with different last name
-    const {data:byRes} = await sb
-      .from('reservations')
-      .select('id')
-      .eq('reservation_number', normalize(res))
-      .maybeSingle();
-    
-    if(byRes){
-      // Reservation exists — could be same guest with typo, or different guest
-      // Use it and update name to current entry
-      resId = byRes.id;
-      await sb.from('reservations').update({
-        last_name: normalize(last),
-        guest_name: first.trim() + ' ' + last.trim(),
-        check_in: checkIn
-      }).eq('id', resId);
-    } else {
-      // Brand new reservation
-      const {data:newRes} = await sb.from('reservations').insert({
-        reservation_number: normalize(res),
-        last_name: normalize(last),
-        guest_name: first.trim() + ' ' + last.trim(),
-        check_in: checkIn
-      }).select('id').single();
-      if(newRes) resId = newRes.id;
-    }
-  }
-
-  if(!resId) throw new Error('Could not create reservation record');
-  return resId;
+  const data = await dbCall('upsertReservation', {
+    res_num: normalize(res),
+    last_name: normalize(last),
+    guest_name: first.trim() + ' ' + last.trim(),
+    check_in: checkIn
+  });
+  if(!data || !data.id) throw new Error('Could not create reservation record');
+  return data.id;
 }
 
 async function findOrCreateBingoSession(resId, weekLabelStr){
-  const {data:session} = await sb
-    .from('bingo_sessions')
-    .select('*')
-    .eq('reservation_id', resId)
-    .maybeSingle();
+  const existing = await dbCall('findSession', {reservation_id: resId});
+  if(existing) return {session: existing, isNew: false};
 
-  if(session) return {session, isNew: false};
-
-  const token = normalize(resId) + '_' + Date.now();
-  const {data:ns, error} = await sb.from('bingo_sessions').insert({
+  const token = resId + '_' + Date.now();
+  const ns = await dbCall('createSession', {
     reservation_id: resId,
     session_token: token,
     reward_notes: weekLabelStr
-  }).select().single();
-  
-  if(error) throw new Error('Could not create session: ' + error.message);
+  });
+  if(!ns) throw new Error('Could not create bingo session');
   return {session: ns, isNew: true};
 }
 
 // ── Auto-save a single activity ───────────────────────────────
-async function autoSaveActivity(idx, photoStoragePath){
+async function autoSaveActivity(idx, photoUrl){
   if(!sessionId) return false;
   try {
-    // Check if record already exists
-    const {data:existing} = await sb.from('completed_activities')
-      .select('id, photo_url')
-      .eq('session_id', sessionId)
-      .eq('activity_index', idx)
-      .maybeSingle();
-    
-    if(existing){
-      // Update photo if we have a new one
-      if(photoStoragePath && photoStoragePath !== existing.photo_url){
-        const {error:ue} = await sb.from('completed_activities')
-          .update({photo_url: photoStoragePath})
-          .eq('id', existing.id);
-        if(ue) throw new Error('Update failed: ' + ue.message);
-      }
-    } else {
-      const {error:ie} = await sb.from('completed_activities').insert({
-        session_id: sessionId,
-        activity_index: idx,
-        activity_name: ACTS[idx] ? ACTS[idx].n : 'Activity',
-        photo_url: photoStoragePath || null
-      });
-      if(ie) throw new Error('Insert failed: ' + ie.message);
-    }
+    await dbCall('saveActivity', {
+      session_id: sessionId,
+      activity_index: idx,
+      activity_name: ACTS[idx] ? ACTS[idx].n : 'Activity',
+      photo_url: photoUrl || null
+    });
     return true;
   } catch(e){
-    console.error('autoSaveActivity error:', e);
+    console.error('autoSaveActivity error:', e.message);
     return false;
   }
 }
@@ -658,15 +606,8 @@ async function startGame() {
       if(session.completed_bingo){ showCongratsScreen(); return; }
 
       if(!isNew){
-        const {data:savedActs, error:loadErr} = await sb
-          .from('completed_activities')
-          .select('*')
-          .eq('session_id', sessionId)
-          .order('activity_index', {ascending:true});
-
-        if(loadErr){
-          console.error('Load progress error:', loadErr.message, loadErr.code);
-        } else if(savedActs && savedActs.length > 0){
+        const savedActs = await dbCall('loadActivities', {session_id: sessionId});
+        if(savedActs && Array.isArray(savedActs) && savedActs.length > 0){
           savedActs.forEach(a => {
             if(a.activity_index >= 0 && a.activity_index < 25){
               done[a.activity_index] = true;
@@ -940,11 +881,7 @@ async function saveProgress(){
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Verifying...';
   try {
-    const {data:saved, error} = await sb
-      .from('completed_activities')
-      .select('activity_index')
-      .eq('session_id', sessionId);
-    if(error) throw error;
+    const saved = await dbCall('loadActivities', {session_id: sessionId});
     const savedIndices = new Set((saved||[]).map(a => a.activity_index));
     for(let i = 0; i < 25; i++){
       if(done[i] && i !== 12 && !savedIndices.has(i)){
@@ -961,7 +898,9 @@ async function saveProgress(){
   btn.innerHTML = '&#128190; Save Progress';
 }
 async function showCongrats(){
-  if(sessionId) await sb.from('bingo_sessions').update({completed_bingo:true}).eq('id',sessionId);
+  if(sessionId){
+    try { await dbCall('completeGame', {session_id: sessionId}); } catch(e){ console.error(e); }
+  }
   showCongratsScreen();
 }
 function showCongratsScreen(){
