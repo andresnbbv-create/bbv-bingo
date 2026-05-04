@@ -1,5 +1,6 @@
 const SUPABASE_URL = 'https://tgpbthntkrwhslkhfqak.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRncGJ0aG50a3J3aHNsa2hmcWFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0OTAxMzMsImV4cCI6MjA5MzA2NjEzM30.0_ZW2kfxKQUJAVyVOsazJkRfdiaNWWK6y29CzHWxKkI';
+const SUPABASE_SERVICE = process.env.SUPABASE_SERVICE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRncGJ0aG50a3J3aHNsa2hmcWFrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NzQ5MDEzMywiZXhwIjoyMDkzMDY2MTMzfQ.cSTS5B4JG9DJC6dB5WYJn1DMatMt89yDELK6TZ0wRl8';
 
 export default async function handler(req, res) {
   // CORS headers — allow requests from our Vercel app
@@ -15,9 +16,10 @@ export default async function handler(req, res) {
     const { action, payload } = req.body || {};
     if (!action) return res.status(400).json({ error: 'Missing action' });
 
+    // Use service key for writes (bypasses RLS), anon for reads
     const headers = {
-      'apikey': SUPABASE_ANON,
-      'Authorization': `Bearer ${SUPABASE_ANON}`,
+      'apikey': SUPABASE_SERVICE,
+      'Authorization': `Bearer ${SUPABASE_SERVICE}`,
       'Content-Type': 'application/json',
       'Prefer': 'return=representation'
     };
@@ -146,26 +148,61 @@ export default async function handler(req, res) {
 
       case 'logPlayer': {
         const { first_name, last_name, reservation_number, check_in_date } = payload;
-        // Upsert — update if reservation already exists, insert if new
         const checkUrl = `${SUPABASE_URL}/rest/v1/bingo_players?reservation_number=eq.${encodeURIComponent(reservation_number)}&select=id&limit=1`;
         const checkR = await fetch(checkUrl, { headers });
         const existing = await checkR.json();
         if (Array.isArray(existing) && existing.length > 0) {
-          // Update existing record with latest login info
           const updateUrl = `${SUPABASE_URL}/rest/v1/bingo_players?id=eq.${existing[0].id}`;
           await fetch(updateUrl, {
             method: 'PATCH',
             headers,
             body: JSON.stringify({ first_name, last_name, check_in_date, started_at: new Date().toISOString() })
           });
+          result = { id: existing[0].id };
         } else {
-          // Insert new player record
-          await fetch(`${SUPABASE_URL}/rest/v1/bingo_players`, {
+          const insertR = await fetch(`${SUPABASE_URL}/rest/v1/bingo_players`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ first_name, last_name, reservation_number, check_in_date, started_at: new Date().toISOString() })
+            body: JSON.stringify({
+              first_name, last_name, reservation_number, check_in_date,
+              started_at: new Date().toISOString(),
+              completed_bingo: false,
+              activities_completed: 0,
+              photos_submitted: 0
+            })
           });
+          const inserted = await insertR.json();
+          result = Array.isArray(inserted) ? inserted[0] : inserted;
         }
+        break;
+      }
+
+      case 'updatePlayerStats': {
+        const { reservation_number, activities_completed, photos_submitted, completed_bingo } = payload;
+        // Try both original and normalized reservation number
+        const updateUrl = `${SUPABASE_URL}/rest/v1/bingo_players?reservation_number=eq.${encodeURIComponent(reservation_number)}`;
+        const updateR = await fetch(updateUrl, {
+          method: 'PATCH',
+          headers: { ...headers, 'Prefer': 'return=representation' },
+          body: JSON.stringify({ activities_completed, photos_submitted, completed_bingo })
+        });
+        const updateData = await updateR.json();
+        console.log('updatePlayerStats response:', updateR.status, JSON.stringify(updateData));
+        result = { success: true, updated: updateData };
+        break;
+      }
+
+      case 'getPlayers': {
+        const url = `${SUPABASE_URL}/rest/v1/bingo_players?select=*&order=started_at.desc`;
+        const r = await fetch(url, { headers });
+        result = await r.json();
+        break;
+      }
+
+      case 'markGiftSent': {
+        const { id } = payload;
+        const url = `${SUPABASE_URL}/rest/v1/bingo_players?id=eq.${id}`;
+        await fetch(url, { method: 'PATCH', headers, body: JSON.stringify({ gift_sent: true, gift_sent_at: new Date().toISOString() }) });
         result = { success: true };
         break;
       }
