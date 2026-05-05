@@ -1,6 +1,7 @@
-// BBV Bingo DB Proxy v2.0
+// BBV Bingo DB Proxy v3.0
 const SUPABASE_URL = 'https://tgpbthntkrwhslkhfqak.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRncGJ0aG50a3J3aHNsa2hmcWFrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc0OTAxMzMsImV4cCI6MjA5MzA2NjEzM30.0_ZW2kfxKQUJAVyVOsazJkRfdiaNWWK6y29CzHWxKkI';
+const SUPABASE_PUB = 'sb_publishable_2RxOIjVafRZLxTE7RUaryw_fjO4mCXK';
 const SUPABASE_SERVICE = process.env.SUPABASE_SERVICE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRncGJ0aG50a3J3aHNsa2hmcWFrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NzQ5MDEzMywiZXhwIjoyMDkzMDY2MTMzfQ.cSTS5B4JG9DJC6dB5WYJn1DMatMt89yDELK6TZ0wRl8';
 
 export default async function handler(req, res) {
@@ -17,9 +18,9 @@ export default async function handler(req, res) {
     const { action, payload } = req.body || {};
     if (!action) return res.status(400).json({ error: 'Missing action' });
 
-    // Use service key for writes (bypasses RLS), anon for reads
+    // Use publishable key as apikey (no origin restriction) + service key as bearer (bypasses RLS)
     const headers = {
-      'apikey': SUPABASE_SERVICE,
+      'apikey': SUPABASE_PUB,
       'Authorization': `Bearer ${SUPABASE_SERVICE}`,
       'Content-Type': 'application/json',
       'Prefer': 'return=representation'
@@ -148,7 +149,7 @@ export default async function handler(req, res) {
       }
 
       case 'logPlayer': {
-        const { first_name, last_name, reservation_number, check_in_date } = payload;
+        const { first_name, last_name, reservation_number, check_in_date, bear_token } = payload;
         const checkUrl = `${SUPABASE_URL}/rest/v1/bingo_players?reservation_number=eq.${encodeURIComponent(reservation_number)}&select=id&limit=1`;
         const checkR = await fetch(checkUrl, { headers });
         const existing = await checkR.json();
@@ -157,7 +158,7 @@ export default async function handler(req, res) {
           await fetch(updateUrl, {
             method: 'PATCH',
             headers,
-            body: JSON.stringify({ first_name, last_name, check_in_date, started_at: new Date().toISOString() })
+            body: JSON.stringify({ first_name, last_name, check_in_date, started_at: new Date().toISOString(), ...(bear_token ? { bear_token } : {}) })
           });
           result = { id: existing[0].id };
         } else {
@@ -169,6 +170,7 @@ export default async function handler(req, res) {
               started_at: new Date().toISOString(),
               completed_bingo: false,
               activities_completed: 0,
+              bear_token: bear_token || null,
               photos_submitted: 0
             })
           });
@@ -179,13 +181,13 @@ export default async function handler(req, res) {
       }
 
       case 'updatePlayerStats': {
-        const { reservation_number, activities_completed, photos_submitted, completed_bingo } = payload;
+        const { reservation_number, activities_completed, photos_submitted, completed_bingo, bear_token } = payload;
         // Try both original and normalized reservation number
         const updateUrl = `${SUPABASE_URL}/rest/v1/bingo_players?reservation_number=eq.${encodeURIComponent(reservation_number)}`;
         const updateR = await fetch(updateUrl, {
           method: 'PATCH',
           headers: { ...headers, 'Prefer': 'return=representation' },
-          body: JSON.stringify({ activities_completed, photos_submitted, completed_bingo })
+          body: JSON.stringify({ activities_completed, photos_submitted, completed_bingo, ...(bear_token ? { bear_token } : {}) })
         });
         const updateData = await updateR.json();
         console.log('updatePlayerStats response:', updateR.status, JSON.stringify(updateData));
