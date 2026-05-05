@@ -190,11 +190,13 @@ export default async function handler(req, res) {
 
         // Always do a final direct patch by ID to guarantee token is saved
         if (playerId && bear_token) {
-          await fetch(`${SUPABASE_URL}/rest/v1/bingo_players?id=eq.${playerId}`, {
+          const tokenPatchR = await fetch(`${SUPABASE_URL}/rest/v1/bingo_players?id=eq.${playerId}`, {
             method: 'PATCH',
-            headers,
+            headers: { ...headers, 'Prefer': 'return=representation' },
             body: JSON.stringify({ bear_token })
           });
+          const tokenPatchBody = await tokenPatchR.json();
+          console.log('Token PATCH result:', tokenPatchR.status, JSON.stringify(tokenPatchBody));
         }
 
         result = { id: playerId };
