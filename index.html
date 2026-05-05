@@ -980,11 +980,13 @@ async function submitClaim(){
     await dbCall('completeGame', {session_id: sessionId});
 
     // Log to bingo_players
+    const claimToken = (document.getElementById('bear-token')||{}).textContent || null;
     await dbCall('logPlayer', {
       first_name: first,
       last_name: last,
       reservation_number: normalize(res),
-      check_in_date: guestCheckIn
+      check_in_date: guestCheckIn,
+      bear_token: claimToken
     });
 
     // Update stats
@@ -992,7 +994,8 @@ async function submitClaim(){
       reservation_number: normalize(res),
       activities_completed: done.filter(Boolean).length - 1,
       photos_submitted: photoPaths.filter(p => p !== null).length,
-      completed_bingo: true
+      completed_bingo: true,
+      bear_token: claimToken
     });
 
     // Clear localStorage

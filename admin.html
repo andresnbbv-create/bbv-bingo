@@ -254,6 +254,7 @@ function renderTable(){
       <td>${started}</td>
       <td>${p.activities_completed||0}/24</td>
       <td>${p.photos_submitted||0}</td>
+      <td><span style="font-family:monospace;font-size:12px;color:#00BEBE;letter-spacing:0.05em">${p.bear_token||'—'}</span></td>
       <td>${status}${bingoBadge}</td>
       <td>${actionBtn}</td>
     </tr>`;
@@ -268,6 +269,7 @@ function renderTable(){
         <th>Started</th>
         <th>Activities</th>
         <th>Photos</th>
+        <th>Token</th>
         <th>Status</th>
         <th>Action</th>
       </tr></thead>
@@ -283,12 +285,12 @@ async function markGiftSent(id){
 }
 
 function exportCSV(){
-  const headers = ['First Name','Last Name','Reservation #','Check-in','Started','Activities','Photos','Bingo','Gift Sent'];
+  const headers = ['First Name','Last Name','Reservation #','Check-in','Started','Activities','Photos','Bingo','Gift Sent','Token'];
   const rows = allPlayers.map(p => [
     p.first_name||'', p.last_name||'', p.reservation_number||'',
     p.check_in_date||'', p.started_at||'',
     p.activities_completed||0, p.photos_submitted||0,
-    p.completed_bingo?'Yes':'No', p.gift_sent?'Yes':'No'
+    p.completed_bingo?'Yes':'No', p.gift_sent?'Yes':'No', p.bear_token||''
   ]);
   const csv = [headers, ...rows].map(r => r.map(v => '"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
   const blob = new Blob([csv], {type:'text/csv'});
