@@ -979,8 +979,10 @@ async function submitClaim(){
     // Mark bingo complete
     await dbCall('completeGame', {session_id: sessionId});
 
-    // Log to bingo_players
-    const claimToken = (document.getElementById('bear-token')||{}).textContent || null;
+    // Generate token NOW (before congrats screen renders it)
+    const claimToken = generateBearToken();
+    const tokenEl = document.getElementById('bear-token');
+    if(tokenEl) tokenEl.textContent = claimToken;
     await dbCall('logPlayer', {
       first_name: first,
       last_name: last,
