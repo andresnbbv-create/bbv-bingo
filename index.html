@@ -250,6 +250,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="share-box">
       <p>To claim your gift, leave us a <a href="https://share.google/DZ50Th8hr3idqBLzW" target="_blank" style="color:#00BEBE;font-weight:700;text-decoration:none">Google Review</a> or tag us in a post or story on Instagram <a href="https://www.instagram.com/bigbearvacations/" target="_blank" style="color:#00BEBE;font-weight:700;text-decoration:none">@BigBearVacations</a> &mdash; then show our team. We&rsquo;d love to thank you for exploring Big Bear with us! &#127873;</p>
     </div>
+    <div style="margin:1.25rem 0;text-align:center;">
+      <p style="font-size:12px;color:#9FE1CB;margin-bottom:0.5rem;letter-spacing:0.05em;text-transform:uppercase;">Your Bingo Adventure Code</p>
+      <div id="bear-token" style="display:inline-block;background:rgba(0,190,190,0.15);border:1.5px solid #00BEBE;border-radius:10px;padding:0.6rem 1.4rem;font-size:22px;font-weight:700;letter-spacing:0.15em;color:#00BEBE;font-family:monospace;">--</div>
+      <p style="font-size:11px;color:#9FE1CB;margin-top:0.5rem;">Include this code in your Google Review so we can track and send your gift!</p>
+    </div>
     <div class="reward-pending">&#127873; Thanks for sharing! Our team will reach out within 24 hours to send your gift for completing your Big Bear adventure.</div>
   </div>
 </div>
@@ -1007,9 +1012,38 @@ async function showCongrats(){
   openClaimModal();
 }
 function showCongratsScreen(){
+  // Generate and display token
+  const token = generateBearToken();
+  const tokenEl = document.getElementById('bear-token');
+  if(tokenEl) tokenEl.textContent = token;
   document.getElementById('bingo-screen').style.display='none';
   document.getElementById('congrats-screen').style.display='block';
 }
+
+// ─── Big Bear Token Generator ───────────────────────────────────────────────
+function generateBearToken() {
+  const words1 = ['BEAR','PINE','LAKE','SNOW','WILD','BOLD','PEAK','BLAZE','CREST','GOLD'];
+  const words2 = ['LAKE','RIDGE','FALLS','TRAIL','SUMMIT','CREEK','PINES','FOREST','COVE','CAMP'];
+  const num = Math.floor(100 + Math.random() * 900);
+  const w1 = words1[Math.floor(Math.random() * words1.length)];
+  const w2 = words2[Math.floor(Math.random() * words2.length)];
+  if (w1 === w2) return generateBearToken(); // avoid duplicates
+  return `${w1}-${w2}-${num}`;
+}
+
+// ─── Auto-save to localStorage every 3 minutes ───────────────────────────────
+function autoSaveLocal(){
+  if(!selectedCheckIn) return;
+  try {
+    const localKey = 'bbv_bingo_' + selectedCheckIn;
+    localStorage.setItem(localKey, JSON.stringify({
+      done: done,
+      photos: photos.map(p => p && p.startsWith('blob:') ? null : p)
+    }));
+  } catch(e){}
+}
+setInterval(autoSaveLocal, 3 * 60 * 1000); // every 3 minutes
+
 </script>
 </body>
 </html>
