@@ -150,33 +150,54 @@ export default async function handler(req, res) {
 
       case 'logPlayer': {
         const { first_name, last_name, reservation_number, check_in_date, bear_token } = payload;
-        const checkUrl = `${SUPABASE_URL}/rest/v1/bingo_players?reservation_number=eq.${encodeURIComponent(reservation_number)}&select=id&limit=1`;
+        const normRes = (reservation_number || '').trim().toLowerCase();
+
+        // Check both original and normalized reservation number
+        const checkUrl = `${SUPABASE_URL}/rest/v1/bingo_players?select=id&limit=1&or=(reservation_number.eq.${encodeURIComponent(reservation_number)},reservation_number.eq.${encodeURIComponent(normRes)})`;
         const checkR = await fetch(checkUrl, { headers });
         const existing = await checkR.json();
+
+        let playerId = null;
+
         if (Array.isArray(existing) && existing.length > 0) {
-          const updateUrl = `${SUPABASE_URL}/rest/v1/bingo_players?id=eq.${existing[0].id}`;
-          await fetch(updateUrl, {
+          playerId = existing[0].id;
+          const patchBody = { first_name, last_name, check_in_date, started_at: new Date().toISOString() };
+          if (bear_token) patchBody.bear_token = bear_token;
+          await fetch(`${SUPABASE_URL}/rest/v1/bingo_players?id=eq.${playerId}`, {
             method: 'PATCH',
             headers,
-            body: JSON.stringify({ first_name, last_name, check_in_date, started_at: new Date().toISOString(), ...(bear_token ? { bear_token } : {}) })
+            body: JSON.stringify(patchBody)
           });
-          result = { id: existing[0].id };
         } else {
           const insertR = await fetch(`${SUPABASE_URL}/rest/v1/bingo_players`, {
             method: 'POST',
-            headers,
+            headers: { ...headers, 'Prefer': 'return=representation' },
             body: JSON.stringify({
-              first_name, last_name, reservation_number, check_in_date,
+              first_name, last_name,
+              reservation_number: normRes,
+              check_in_date,
               started_at: new Date().toISOString(),
               completed_bingo: false,
               activities_completed: 0,
-              bear_token: bear_token || null,
-              photos_submitted: 0
+              photos_submitted: 0,
+              bear_token: bear_token || null
             })
           });
           const inserted = await insertR.json();
-          result = Array.isArray(inserted) ? inserted[0] : inserted;
+          const row = Array.isArray(inserted) ? inserted[0] : inserted;
+          playerId = row ? row.id : null;
         }
+
+        // Always do a final direct patch by ID to guarantee token is saved
+        if (playerId && bear_token) {
+          await fetch(`${SUPABASE_URL}/rest/v1/bingo_players?id=eq.${playerId}`, {
+            method: 'PATCH',
+            headers,
+            body: JSON.stringify({ bear_token })
+          });
+        }
+
+        result = { id: playerId };
         break;
       }
 
