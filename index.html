@@ -983,37 +983,22 @@ async function submitClaim(){
     const claimToken = generateBearToken();
     const tokenEl = document.getElementById('bear-token');
     if(tokenEl) tokenEl.textContent = claimToken;
+    await dbCall('logPlayer', {
+      first_name: first,
+      last_name: last,
+      reservation_number: normalize(res),
+      check_in_date: guestCheckIn,
+      bear_token: claimToken
+    });
 
-    // Write directly to bingo_players via sb client (bypasses proxy allowlist)
-    const normRes = normalize(res);
-    const { data: existingPlayer } = await sb
-      .from('bingo_players')
-      .select('id')
-      .eq('reservation_number', normRes)
-      .maybeSingle();
-
-    if(existingPlayer) {
-      await sb.from('bingo_players').update({
-        first_name: first,
-        last_name: last,
-        completed_bingo: true,
-        activities_completed: done.filter(Boolean).length - 1,
-        photos_submitted: photoPaths.filter(p => p !== null).length,
-        bear_token: claimToken
-      }).eq('id', existingPlayer.id);
-    } else {
-      await sb.from('bingo_players').insert({
-        first_name: first,
-        last_name: last,
-        reservation_number: normRes,
-        check_in_date: guestCheckIn,
-        started_at: new Date().toISOString(),
-        completed_bingo: true,
-        activities_completed: done.filter(Boolean).length - 1,
-        photos_submitted: photoPaths.filter(p => p !== null).length,
-        bear_token: claimToken
-      });
-    }
+    // Update stats
+    await dbCall('updatePlayerStats', {
+      reservation_number: normalize(res),
+      activities_completed: done.filter(Boolean).length - 1,
+      photos_submitted: photoPaths.filter(p => p !== null).length,
+      completed_bingo: true,
+      bear_token: claimToken
+    });
 
     // Clear localStorage
     try { localStorage.removeItem('bbv_bingo_' + guestCheckIn); } catch(e){}
@@ -1032,10 +1017,7 @@ async function showCongrats(){
   openClaimModal();
 }
 function showCongratsScreen(){
-  // Generate and display token
-  const token = generateBearToken();
-  const tokenEl = document.getElementById('bear-token');
-  if(tokenEl) tokenEl.textContent = token;
+  // Token already generated in submitClaim — don't overwrite it
   document.getElementById('bingo-screen').style.display='none';
   document.getElementById('congrats-screen').style.display='block';
 }
