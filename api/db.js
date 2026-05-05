@@ -182,16 +182,41 @@ export default async function handler(req, res) {
 
       case 'updatePlayerStats': {
         const { reservation_number, activities_completed, photos_submitted, completed_bingo, bear_token } = payload;
-        // Try both original and normalized reservation number
+        const patchBody = { activities_completed, photos_submitted, completed_bingo };
+        if (bear_token) patchBody.bear_token = bear_token;
+
+        // Try original reservation number first
         const updateUrl = `${SUPABASE_URL}/rest/v1/bingo_players?reservation_number=eq.${encodeURIComponent(reservation_number)}`;
         const updateR = await fetch(updateUrl, {
           method: 'PATCH',
           headers: { ...headers, 'Prefer': 'return=representation' },
-          body: JSON.stringify({ activities_completed, photos_submitted, completed_bingo, ...(bear_token ? { bear_token } : {}) })
+          body: JSON.stringify(patchBody)
         });
         const updateData = await updateR.json();
-        console.log('updatePlayerStats response:', updateR.status, JSON.stringify(updateData));
-        result = { success: true, updated: updateData };
+
+        // If no rows matched, try with lowercased reservation number
+        if (!Array.isArray(updateData) || updateData.length === 0) {
+          const normRes = reservation_number.trim().toLowerCase();
+          const updateUrl2 = `${SUPABASE_URL}/rest/v1/bingo_players?reservation_number=eq.${encodeURIComponent(normRes)}`;
+          await fetch(updateUrl2, {
+            method: 'PATCH',
+            headers: { ...headers, 'Prefer': 'return=representation' },
+            body: JSON.stringify(patchBody)
+          });
+        }
+        result = { success: true };
+        break;
+      }
+
+      case 'saveToken': {
+        const { id, bear_token } = payload;
+        const url = `${SUPABASE_URL}/rest/v1/bingo_players?id=eq.${id}`;
+        await fetch(url, {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ bear_token })
+        });
+        result = { success: true };
         break;
       }
 
