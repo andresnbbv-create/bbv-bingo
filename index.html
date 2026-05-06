@@ -101,7 +101,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .modal-event-tag{background:#e8c87a;color:#192b40;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;margin-bottom:4px;display:inline-block}
 .modal-hero h2{font-size:16px;font-weight:700;color:#fff;line-height:1.3}
 .modal-hero p{font-size:11px;color:#9FE1CB;margin-top:2px}
-.modal-body{padding:1.25rem}
+.modal-body{padding:1.25rem;position:relative;background-size:cover;background-position:center;background-repeat:no-repeat}
+.modal-body::before{content:"";position:absolute;inset:0;background:rgba(255,255,255,.92);backdrop-filter:blur(2px);z-index:0}
+.modal-body > *{position:relative;z-index:1}
 .modal-desc{font-size:13px;color:#555;line-height:1.6;margin-bottom:1rem}
 .modal-details{background:#f8fafa;border-radius:10px;padding:10px 12px;margin-bottom:1rem}
 .modal-details p{font-size:12px;color:#444;line-height:1.8}
@@ -746,6 +748,11 @@ function openModal(i){
   const a=ACTS[i];if(!a)return;
   const tag=document.getElementById('m-event-tag');
   tag.style.display=a.isEvent?'inline-block':'none';
+  // Set modal body background to the activity photo
+  const body=document.querySelector('#modal-overlay .modal-body');
+  if(body){
+    body.style.backgroundImage = a.photo ? "url('"+a.photo+"')" : '';
+  }
   document.getElementById('m-title').textContent=a.n;
   document.getElementById('m-sub').textContent=(a.when?a.when+' · ':'')+( a.addr||'Big Bear Lake, CA');
   document.getElementById('m-desc').textContent='Click link below for more information about this event or activity. To play this Bingo Spot, take a photo of you doing the event and upload and mark complete. This will mark your Bingo card as checked.';
