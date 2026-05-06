@@ -65,9 +65,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .cell.free{background:var(--navy);border-color:var(--navy);cursor:default}
 .cell.free:hover{transform:none;box-shadow:none}
 .cell.event-cell{border-color:#e8c87a}
-.cell-bg{position:absolute;inset:0;background-size:cover;background-position:center;opacity:.35}
+.cell-bg{position:absolute;inset:0;background-size:cover;background-position:center;opacity:.7}
 .cell-photo-bg{position:absolute;inset:0;background-size:cover;background-position:center;opacity:1}
-.cell-overlay{position:absolute;inset:0;background:rgba(25,43,64,.3)}
+.cell-overlay{position:absolute;inset:0;background:rgba(25,43,64,0)}
 .cell.done .cell-overlay{background:rgba(0,0,0,.08)}
 .cell.line .cell-overlay{background:rgba(0,190,190,.15)}
 .cell:not(.has-photo) .cell-overlay{display:none}
@@ -195,6 +195,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="modal-body">
       <p class="modal-desc" id="m-desc"></p>
       <div class="modal-details" id="m-details"></div>
+      <a id="m-info-link" href="#" target="_blank" rel="noopener" style="display:none;background:var(--teal);color:#192b40;text-align:center;padding:10px;border-radius:10px;font-size:13px;font-weight:700;text-decoration:none;margin-bottom:1rem;">More Info &rarr;</a>
       <span class="upload-label">Upload your photo to complete:</span>
       <div class="upload-box" onclick="document.getElementById('finput').click()">
         <p id="u-prompt">&#128247; Tap to upload from camera roll</p>
@@ -361,7 +362,7 @@ const WEEKLY_CARDS = [
   [
     EG.hike, EVENTS.farmers_tue, EG.kayak, EVENTS.runwild, EG.village,
     EVENTS.farmers_fri, EG.fish, EVENTS.live_music_fri, EG.stars, EVENTS.barrel33,
-    EG.boat, EG.bbq, null/*FREE*/, EVENTS.flagceremony, EG.horse,
+    EG.boat, EG.bbq, EG.wyatts, EVENTS.flagceremony, EG.horse,
     EVENTS.storytime, EG.discovery, EG.bike, EVENTS.carp, EG.restaurant,
     EG.offroad, EG.coaster, EG.parks, EG.escape, EG.campfire
   ],
@@ -370,7 +371,7 @@ const WEEKLY_CARDS = [
   [
     EVENTS.farmers_tue, EG.slide, EG.kayak, EG.hike, EVENTS.farmers_fri,
     EG.village, EVENTS.barrel33, EG.fish, EVENTS.live_music_fri, EG.stars,
-    EG.pirate, EG.zipline, null/*FREE*/, EVENTS.corks, EG.horse,
+    EG.pirate, EG.zipline, EG.wyatts, EVENTS.corks, EG.horse,
     EVENTS.storytime, EG.museum, EG.laketours, EVENTS.carp, EG.wyatts,
     EG.gokarts, EG.fitness, EG.dinedog, EG.offroad, EG.campfire
   ],
@@ -379,7 +380,7 @@ const WEEKLY_CARDS = [
   [
     EVENTS.earthday, EVENTS.farmers_tue, EG.hike, EVENTS.spartan, EVENTS.farmers_fri,
     EG.kayak, EVENTS.barrel33, EVENTS.maifest, EVENTS.live_music_fri, EG.discovery,
-    EG.boat, EG.bbq, null/*FREE*/, EG.fish, EG.village,
+    EG.boat, EG.bbq, EG.wyatts, EG.fish, EG.village,
     EVENTS.storytime, EG.bike, EVENTS.carp, EG.horse, EG.escape,
     EG.coaster, EG.museum, EG.laketours, EG.campfire, EG.stars
   ],
@@ -388,7 +389,7 @@ const WEEKLY_CARDS = [
   [
     EVENTS.farmers_tue, EG.hike, EVENTS.bbqfest, EG.kayak, EVENTS.farmers_fri,
     EVENTS.barrel33, EVENTS.memorial5k, EG.fish, EVENTS.live_music_fri, EVENTS.maifest,
-    EG.village, EVENTS.climate, null/*FREE*/, EVENTS.astronomy, EG.horse,
+    EG.village, EVENTS.climate, EG.wyatts, EVENTS.astronomy, EG.horse,
     EVENTS.storytime, EG.offroad, EVENTS.carp, EG.zipline, EG.restaurant,
     EG.slide, EG.pirate, EG.dinedog, EG.parks, EG.campfire
   ],
@@ -397,7 +398,7 @@ const WEEKLY_CARDS = [
   [
     EVENTS.trout, EVENTS.farmers_tue, EG.hike, EVENTS.reel, EVENTS.farmers_fri,
     EG.kayak, EVENTS.barrel33, EG.fish, EVENTS.live_music_fri, EVENTS.maifest,
-    EG.village, EG.bbq, null/*FREE*/, EG.stars, EG.horse,
+    EG.village, EG.bbq, EG.wyatts, EG.stars, EG.horse,
     EVENTS.storytime, EG.boat, EVENTS.carp, EG.gokarts, EG.museum,
     EG.fitness, EG.escape, EG.campfire, EG.slide, EG.laketours
   ]
@@ -415,16 +416,14 @@ function getWeekCard(checkInDateStr) {
   ];
   for (const w of bounds) {
     if (d >= w.start && d <= w.end) {
-      const raw = WEEKLY_CARDS[w.idx];
-      const acts = raw.map((a, i) => i === 12 ? {id:'free',n:'FREE',free:true} : a);
+      const acts = WEEKLY_CARDS[w.idx].slice();
       return {acts, label: w.label};
     }
   }
   // Fallback: use week index by day of month
   const day = d.getDate();
   const idx = Math.min(Math.floor((day - 1) / 7), 4);
-  const raw = WEEKLY_CARDS[idx];
-  const acts = raw.map((a, i) => i === 12 ? {id:'free',n:'FREE',free:true} : a);
+  const acts = WEEKLY_CARDS[idx].slice();
   return {acts, label: 'Week ' + (idx + 1)};
 }
 
@@ -611,7 +610,6 @@ async function startGame() {
   done = new Array(25).fill(false);
   photos = new Array(25).fill(null);
   photoPaths = new Array(25).fill(null);
-  done[12] = true;
   let hasSavedProgress = false;
 
   // Load progress from localStorage (no DB needed until claim)
@@ -628,7 +626,7 @@ async function startGame() {
 
   const badge = document.getElementById('guest-badge');
   if(hasSavedProgress){
-    const cnt = done.filter(Boolean).length - 1;
+    const cnt = done.filter(Boolean).length;
     badge.textContent = cnt + ' activities restored ✓';
     badge.style.background = 'rgba(0,175,145,.25)';
     badge.style.borderColor = 'rgba(0,175,145,.5)';
@@ -749,13 +747,20 @@ function openModal(i){
   tag.style.display=a.isEvent?'inline-block':'none';
   document.getElementById('m-title').textContent=a.n;
   document.getElementById('m-sub').textContent=(a.when?a.when+' · ':'')+( a.addr||'Big Bear Lake, CA');
-  document.getElementById('m-desc').textContent=a.d||'';
+  document.getElementById('m-desc').textContent='Click link below for more information about this event or activity. To play this Bingo Spot, take a photo of you doing the event and upload and mark complete. This will mark your Bingo card as checked.';
   const det=document.getElementById('m-details');let html='';
   if(a.when)html+='<p><span class="detail-label">&#128197; When: </span>'+a.when+'</p>';
   if(a.tip)html+='<p><span class="detail-label">&#128161; Tip: </span>'+a.tip+'</p>';
   if(a.phone)html+='<p><span class="detail-label">&#128222; Info: </span><a href="'+(a.phone.startsWith('(')?'tel:':'')+a.phone+'">'+ a.phone+'</a></p>';
   if(a.addr)html+='<p><span class="detail-label">&#128205; Address: </span><a href="'+(a.maps||'#')+'" target="_blank">'+a.addr+'</a></p>';
   if(a.maps)html+='<p><a href="'+a.maps+'" target="_blank" style="color:var(--teal);font-weight:600">&#128506;&#65039; Get Directions &rarr;</a></p>';
+  // Add "More Info" link if available
+  const infoUrl = a.link || a.maps || (a.phone && !a.phone.startsWith('(') ? a.phone : null);
+  const infoLink = document.getElementById('m-info-link');
+  if(infoLink){
+    if(infoUrl){ infoLink.href=infoUrl; infoLink.style.display='block'; }
+    else { infoLink.style.display='none'; }
+  }
   det.innerHTML=html;det.style.display=html?'block':'none';
   const prev=document.getElementById('u-prev');prev.style.display='none';prev.src='';
   document.getElementById('u-prompt').style.display='block';
@@ -925,11 +930,11 @@ async function saveProgress(){
     const saved = await dbCall('loadActivities', {session_id: sessionId});
     const savedIndices = new Set((saved||[]).map(a => a.activity_index));
     for(let i = 0; i < 25; i++){
-      if(done[i] && i !== 12 && !savedIndices.has(i)){
+      if(done[i] && !savedIndices.has(i)){
         await autoSaveActivity(i, photoPaths[i]);
       }
     }
-    const total = done.filter(Boolean).length - 1;
+    const total = done.filter(Boolean).length;
     showSaved('✓ Saved — ' + total + ' activit' + (total===1?'y':'ies') + ' stored');
   } catch(e){
     console.error('saveProgress error:', e);
@@ -971,7 +976,7 @@ async function submitClaim(){
 
     // Save all completed activities
     for(let i = 0; i < 25; i++){
-      if(done[i] && i !== 12){
+      if(done[i]){
         await autoSaveActivity(i, photoPaths[i] || null);
       }
     }
@@ -997,7 +1002,7 @@ async function submitClaim(){
         first_name: first,
         last_name: last,
         completed_bingo: true,
-        activities_completed: done.filter(Boolean).length - 1,
+        activities_completed: done.filter(Boolean).length,
         photos_submitted: photoPaths.filter(p => p !== null).length,
         bear_token: claimToken
       }).eq('id', existingPlayer.id);
@@ -1009,7 +1014,7 @@ async function submitClaim(){
         check_in_date: guestCheckIn,
         started_at: new Date().toISOString(),
         completed_bingo: true,
-        activities_completed: done.filter(Boolean).length - 1,
+        activities_completed: done.filter(Boolean).length,
         photos_submitted: photoPaths.filter(p => p !== null).length,
         bear_token: claimToken
       });
