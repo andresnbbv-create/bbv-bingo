@@ -160,6 +160,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div class="login-error" id="login-error"></div>
     <p class="login-note">Your card is personalized to your stay week!</p>
     <div style="text-align:center;margin-top:1rem">
+      <a href="#" onclick="openRules();return false;" style="font-size:13px;font-weight:700;color:#fff;background:#192b40;padding:10px 22px;border-radius:24px;text-decoration:none;display:inline-block;border:2px solid #00BEBE;box-shadow:0 2px 8px rgba(0,0,0,0.15);">📖 Rules of Play</a>
+    </div>
+    <div style="text-align:center;margin-top:1rem">
       <a href="/admin" style="font-size:12px;font-weight:700;color:#192b40;background:#00bebe;padding:6px 16px;border-radius:20px;text-decoration:none;display:inline-block">Admin Login</a>
     </div>
   </div>
@@ -240,6 +243,114 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <button class="btn-cancel" onclick="closeClaim()">Cancel</button>
         <button class="btn-done" id="claim-submit-btn" onclick="submitClaim()">Claim My Gift &#127873;</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- RULES OF PLAY MODAL -->
+<div class="modal-overlay" id="rules-overlay" style="z-index:400">
+  <div class="modal" style="max-width:520px;max-height:92vh;overflow-y:auto">
+    <div style="background:linear-gradient(135deg,#192b40 0%,#0d1e2d 100%);padding:1.75rem 1.5rem;text-align:center;position:relative">
+      <button onclick="closeRules()" style="position:absolute;top:12px;right:14px;background:rgba(255,255,255,0.15);border:none;color:#fff;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:18px;font-weight:700;line-height:1;display:flex;align-items:center;justify-content:center" aria-label="Close">×</button>
+      <div style="font-size:32px;margin-bottom:6px">🐻</div>
+      <h2 style="color:#fff;font-size:22px;font-weight:700;line-height:1.2;margin:0">Big Bear Vacations Bingo</h2>
+      <p style="color:#00BEBE;font-size:13px;font-weight:600;margin-top:6px;letter-spacing:0.5px">OFFICIAL RULES OF PLAY</p>
+    </div>
+    <div style="padding:1.5rem 1.5rem 1.75rem;color:#333;font-size:14px;line-height:1.6">
+
+      <div style="background:linear-gradient(135deg,#00BEBE 0%,#00AF91 100%);padding:14px 16px;border-radius:12px;margin-bottom:1.25rem;color:#fff">
+        <div style="font-weight:700;font-size:15px;margin-bottom:4px">🎯 The Goal</div>
+        <div style="font-size:13px;line-height:1.5">Complete <b>5 activities in a row</b> — horizontally, vertically, or diagonally — to earn a special thank-you gift from us!</div>
+      </div>
+
+      <h3 style="color:#192b40;font-size:16px;font-weight:700;margin-bottom:8px;border-bottom:2px solid #00BEBE;padding-bottom:4px">🎟️ Getting Started</h3>
+      <ol style="padding-left:20px;margin-bottom:1.25rem">
+        <li style="margin-bottom:4px">Open your personal bingo link from our welcome message</li>
+        <li style="margin-bottom:4px">Pick your check-in date</li>
+        <li style="margin-bottom:4px">Enter first name, last name, and reservation number</li>
+        <li style="margin-bottom:4px">Your custom weekly card loads — 25 unique Big Bear activities!</li>
+      </ol>
+
+      <h3 style="color:#192b40;font-size:16px;font-weight:700;margin-bottom:8px;border-bottom:2px solid #00BEBE;padding-bottom:4px">🗓️ Customized to Your Stay</h3>
+      <p style="margin-bottom:1.25rem;font-size:13px">Each card features events and activities happening during <b>your specific stay week</b> — Mother's Day Brunch, Maifest, Memorial Day BBQ, fishing tournaments, and more.</p>
+
+      <h3 style="color:#192b40;font-size:16px;font-weight:700;margin-bottom:8px;border-bottom:2px solid #00BEBE;padding-bottom:4px">🎲 How to Play</h3>
+      <div style="background:#f8fafa;border-left:4px solid #00BEBE;border-radius:6px;padding:10px 14px;margin-bottom:8px">
+        <b style="color:#00BEBE">Step 1 — Pick</b> · Tap a tile to see details, address, and tips
+      </div>
+      <div style="background:#f8fafa;border-left:4px solid #00BEBE;border-radius:6px;padding:10px 14px;margin-bottom:8px">
+        <b style="color:#00BEBE">Step 2 — Go</b> · Get out and enjoy Big Bear!
+      </div>
+      <div style="background:#f8fafa;border-left:4px solid #00BEBE;border-radius:6px;padding:10px 14px;margin-bottom:8px">
+        <b style="color:#00BEBE">Step 3 — Snap</b> · Take a photo of you doing the activity
+      </div>
+      <div style="background:#f8fafa;border-left:4px solid #00BEBE;border-radius:6px;padding:10px 14px;margin-bottom:8px">
+        <b style="color:#00BEBE">Step 4 — Upload</b> · Tap the tile, upload your photo, mark complete
+      </div>
+      <div style="background:#f8fafa;border-left:4px solid #00BEBE;border-radius:6px;padding:10px 14px;margin-bottom:1.25rem">
+        <b style="color:#00BEBE">Step 5 — Win</b> · Complete 5 in a row (any direction) to claim your gift!
+      </div>
+
+      <h3 style="color:#192b40;font-size:16px;font-weight:700;margin-bottom:8px;border-bottom:2px solid #00BEBE;padding-bottom:4px">🎁 Claiming Your Reward</h3>
+      <ol style="padding-left:20px;margin-bottom:8px">
+        <li style="margin-bottom:4px">Tap "Claim My Gift" once you complete a line</li>
+        <li style="margin-bottom:4px">Confirm your name and reservation number</li>
+        <li style="margin-bottom:4px">You'll get a unique <b>Bear Token</b> (like PINE-RIDGE-427)</li>
+        <li style="margin-bottom:4px">Show your token to a Big Bear Vacations team member to redeem</li>
+      </ol>
+      <div style="background:#fff5e6;border:1.5px solid #e8c87a;border-radius:8px;padding:10px 14px;margin-bottom:1.25rem;font-size:13px">
+        <b>📌 Save your token!</b> Screenshot or write it down — you'll need it to claim your gift.
+      </div>
+
+      <h3 style="color:#192b40;font-size:16px;font-weight:700;margin-bottom:8px;border-bottom:2px solid #00BEBE;padding-bottom:4px">✅ Rules & Guidelines</h3>
+      <div style="display:flex;gap:10px;margin-bottom:1.25rem;flex-wrap:wrap">
+        <div style="flex:1;min-width:200px;background:#e8f7f0;border-radius:8px;padding:10px 12px">
+          <div style="font-weight:700;color:#00AF91;margin-bottom:4px;font-size:13px">✓ What Counts</div>
+          <ul style="padding-left:16px;font-size:12px;margin:0;line-height:1.5">
+            <li>Actually doing the activity</li>
+            <li>Photos showing the activity/location</li>
+            <li>One gift per reservation</li>
+            <li>Activities during your stay</li>
+          </ul>
+        </div>
+        <div style="flex:1;min-width:200px;background:#fdeaea;border-radius:8px;padding:10px 12px">
+          <div style="font-weight:700;color:#c93838;margin-bottom:4px;font-size:13px">✗ What Doesn't</div>
+          <ul style="padding-left:16px;font-size:12px;margin:0;line-height:1.5">
+            <li>Photos from the internet</li>
+            <li>Same photo for multiple tiles</li>
+            <li>Activities before/after stay</li>
+            <li>Photos not showing activity</li>
+          </ul>
+        </div>
+      </div>
+
+      <h3 style="color:#192b40;font-size:16px;font-weight:700;margin-bottom:8px;border-bottom:2px solid #00BEBE;padding-bottom:4px">💡 Pro Tips</h3>
+      <ul style="padding-left:20px;margin-bottom:1.25rem;font-size:13px">
+        <li style="margin-bottom:4px"><b>Plan ahead</b> — map out activities on day 1</li>
+        <li style="margin-bottom:4px"><b>Easy wins</b> — recurring activities (kayak, hike, village walk) are available all week</li>
+        <li style="margin-bottom:4px"><b>Catch the events</b> — special weekly festivals are more fun and earn stamps</li>
+        <li style="margin-bottom:4px"><b>Auto-saves</b> — play across multiple days, no worries</li>
+        <li style="margin-bottom:4px"><b>Tag us!</b> Share your photos <a href="https://www.instagram.com/bigbearvacations/" target="_blank" style="color:#00BEBE;font-weight:600;text-decoration:none">@bigbearvacations</a></li>
+      </ul>
+
+      <h3 style="color:#192b40;font-size:16px;font-weight:700;margin-bottom:8px;border-bottom:2px solid #00BEBE;padding-bottom:4px">🤝 House Rules</h3>
+      <ul style="padding-left:20px;margin-bottom:1.25rem;font-size:13px">
+        <li style="margin-bottom:4px"><b>Be safe.</b> Use common sense for hiking, water, and altitude activities</li>
+        <li style="margin-bottom:4px"><b>Be respectful.</b> These are real businesses and community events</li>
+        <li style="margin-bottom:4px"><b>Follow location rules.</b> Pay entry fees, follow signage, respect hours</li>
+        <li style="margin-bottom:4px"><b>Have fun!</b> Discover Big Bear and make memories 🏔️</li>
+      </ul>
+
+      <div style="background:#192b40;color:#fff;border-radius:12px;padding:16px;text-align:center;margin-top:1rem">
+        <div style="font-weight:700;font-size:15px;margin-bottom:8px">❓ Questions or Issues?</div>
+        <div style="font-size:13px;line-height:1.7">
+          <div>📞 <a href="tel:9098668200" style="color:#00BEBE;text-decoration:none;font-weight:600">(909) 866-8200</a></div>
+          <div>✉️ <a href="mailto:frontdesk@bigbearvacations.com" style="color:#00BEBE;text-decoration:none;font-weight:600">frontdesk@bigbearvacations.com</a></div>
+          <div>✉️ <a href="mailto:andres@bigbearvacations.com" style="color:#00BEBE;text-decoration:none;font-weight:600">andres@bigbearvacations.com</a></div>
+        </div>
+      </div>
+
+      <button onclick="closeRules()" style="width:100%;margin-top:1.25rem;padding:12px;background:#00BEBE;color:#192b40;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">Got it — let's play! 🎉</button>
     </div>
   </div>
 </div>
@@ -835,6 +946,8 @@ function refresh(){
 }
 
 function closeModal(){document.getElementById('modal-overlay').classList.remove('open');currentCell=null;currentFile=null;}
+function openRules(){document.getElementById('rules-overlay').classList.add('open');}
+function closeRules(){document.getElementById('rules-overlay').classList.remove('open');}
 
 function onPhoto(e){
   const f=e.target.files[0];if(!f)return;currentFile=f;
