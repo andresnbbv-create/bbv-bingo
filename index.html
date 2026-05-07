@@ -715,6 +715,14 @@ async function startGame() {
   // Store check-in for later use
   guestCheckIn = selectedCheckIn;
 
+  // Fire-and-forget login tracking (don't block the UI)
+  try {
+    sb.from('bingo_logins').insert({
+      check_in_date: selectedCheckIn,
+      user_agent: navigator.userAgent
+    }).then(()=>{}).catch(e => console.log('Login log skipped:', e));
+  } catch(e) { console.log('Login log skipped:', e); }
+
   const btn = document.getElementById('login-btn');
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Loading your card...';
