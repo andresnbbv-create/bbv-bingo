@@ -596,7 +596,19 @@ let currentCell = null;
 let currentFile = null;
 let isSaving = false;
 
-window.onload = function(){ initCal(); };
+window.onload = function(){
+  initCal();
+  // Fire-and-forget page view tracking (once per browser session)
+  try {
+    if(!sessionStorage.getItem('bbv_pv_logged')){
+      sb.from('bingo_page_views').insert({
+        user_agent: navigator.userAgent
+      }).then(()=>{
+        sessionStorage.setItem('bbv_pv_logged', '1');
+      }).catch(e => console.log('PV log skipped:', e));
+    }
+  } catch(e) { console.log('PV log skipped:', e); }
+};
 
 // ── Silent auto-save indicator ────────────────────────────────
 function showSaved(msg){
