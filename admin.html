@@ -118,7 +118,7 @@ tr:last-child td{border-bottom:none}
     <div class="stats">
       <div class="stat"><div class="num" id="s-views">—</div><div class="lbl">Page Views</div></div>
       <div class="stat"><div class="num" id="s-logins">—</div><div class="lbl">Started Game</div></div>
-      <div class="stat"><div class="num" id="s-dropoff">—</div><div class="lbl">Drop-Off Rate</div></div>
+      <div class="stat"><div class="num" id="s-startrate">—</div><div class="lbl">Game Start Rate</div></div>
       <div class="stat"><div class="num" id="s-total">—</div><div class="lbl">Players Started</div></div>
       <div class="stat"><div class="num" id="s-bingo">—</div><div class="lbl">Bingos Completed</div></div>
       <div class="stat"><div class="num" id="s-conversion">—</div><div class="lbl">Bingo Conversion</div></div>
@@ -274,11 +274,19 @@ function updateStats(){
   const totalActs = filteredPlayers.reduce((sum,p) => sum + (p.activities_completed||0), 0);
   const totalPhotos = filteredPlayers.reduce((sum,p) => sum + (p.photos_submitted||0), 0);
   const conversion = logins > 0 ? Math.round((bingos / logins) * 100) + '%' : '—';
-  const dropoff = views > 0 ? Math.round(((views - logins) / views) * 100) + '%' : '—';
+  const startRatePct = views > 0 ? Math.round((logins / views) * 100) : null;
+  const startRate = startRatePct !== null ? startRatePct + '%' : '—';
+
+  const startRateEl = document.getElementById('s-startrate');
+  startRateEl.textContent = startRate;
+  // Color code: >=100% green, 50-99% navy, <50% red
+  if(startRatePct === null) startRateEl.style.color = '';
+  else if(startRatePct >= 100) startRateEl.style.color = '#00AF91';
+  else if(startRatePct >= 50) startRateEl.style.color = '#192b40';
+  else startRateEl.style.color = '#c0392b';
 
   document.getElementById('s-views').textContent = views;
   document.getElementById('s-logins').textContent = logins;
-  document.getElementById('s-dropoff').textContent = dropoff;
   document.getElementById('s-total').textContent = total;
   document.getElementById('s-bingo').textContent = bingos;
   document.getElementById('s-conversion').textContent = conversion;
